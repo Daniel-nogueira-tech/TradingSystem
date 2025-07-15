@@ -1,0 +1,123 @@
+* {
+  box-sizing: border-box;
+}
+
+
+.container-home {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 15px;
+  padding: 12px;
+  width: 100%;
+  height: auto;
+}
+
+.content-wrapper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px; 
+  position: relative;
+}
+
+.container-home-main {
+  min-height: 100vh;
+  margin: 10px;
+  background: var(--background);
+    border-radius: 10px;
+}
+
+.container-results h3,
+.container-results p {
+  text-align: center;
+  font-size: 1rem;
+}
+
+.container-results {
+  flex: 1 1 250px;
+  height: 100px;
+  background: var(--background);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  box-shadow: var(--box-shadow);
+  transition: 0.5s ease;
+  animation: fadeIns 1s ease;
+}
+
+.container-results:hover {
+  box-shadow: var(--box-shadow-active);
+  transform: scale(1.1);
+}
+
+.container-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.analysis-chart {
+  flex: 2 1 300px;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.button-date {
+  background-color: var(--background-color-button);
+  width: 110px;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  transition: 0.3s ease; 
+}
+
+.button-date:hover {
+  background-color: var(--background-color-button-active);
+  transform: scale(1.1);
+}
+
+.date {
+  font-size: 0.875rem;
+}
+
+.button-date-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 300px;
+  gap: 15px;
+}
+
+.button-dt {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  text-align: center;
+}
+.button-search{
+  background-color: var(--background-color-button-active);
+}
+
+@keyframes fadeIns {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .container-results {
+    flex: 1 1 100%;
+    height: auto;
+  }
+
+  .button-date-container {
+    flex-direction: column;
+    width: 100%;
+  }
+}

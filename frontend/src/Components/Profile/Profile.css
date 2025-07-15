@@ -1,0 +1,46 @@
+.profile-main {
+  padding: 20px;
+  display: flex;
+  width: 84vw;
+  justify-content: center;
+  align-items: center;
+  min-height: 96vh;
+  background: var(--background);
+  border-radius: 10px;
+  box-shadow: var(--box-shadow);
+}
+
+.profile-card {
+  background-color: var(--background-card);
+  box-shadow: var(--box-shadow);
+  padding: 30px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 400px;
+  animation: fadeIns 1s ease;
+}
+
+.profile-card h2 {
+  margin-bottom: 20px;
+  font-size: 24px;
+  border-bottom: 2px solid var(--white);
+  padding-bottom: 10px;
+}
+
+.profile-info p {
+  margin: 10px 0;
+  font-size: 16px;
+}
+
+.button-profile {
+  display: flex;
+  justify-content: space-between;
+}
+
+#save-button {
+  background-color: var(--button-negative);
+}
+
+#save-button:hover {
+  background-color: var(--button-negative-active);
+}

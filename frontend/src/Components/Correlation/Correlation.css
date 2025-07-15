@@ -1,0 +1,49 @@
+.correlation-main {
+  padding: 20px;
+  background: var(--background);
+  min-height: 96vh;
+  width: 84vw;
+  border-radius: 10px;
+  animation: fadeIns 1s ease;
+}
+
+.correlation-main h2 {
+  margin-bottom: 16px;
+  font-size: 22px;
+  color: var(--color-font);
+}
+
+.correlation-table-wrapper {
+  overflow-x: auto;
+}
+
+.correlation-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.correlation-table th,
+.correlation-table td {
+  padding: 12px;
+}
+
+.crypto-label {
+  text-align: left;
+  font-weight: bold;
+  background: var(--background);
+}
+
+
+/* Coloring based on correlation strength */
+.high {
+  background-color: green;
+}
+
+.medium {
+  background-color: var(--background);
+}
+
+.low {
+  background-color: red;
+}

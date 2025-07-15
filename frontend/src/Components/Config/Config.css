@@ -1,0 +1,94 @@
+.config-main-primary {
+  width: 84vw;
+  height: 96vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  justify-items: center;
+  background: var(--background);
+  border-radius: 10px;
+}
+
+.config-main {
+  padding: 30px;
+  background-color: var(--background-card);
+  max-width: 600px;
+  margin: auto;
+  border-radius: 10px;
+  box-shadow: var(--box-shadow);
+  animation: fadeIns 1s ease;
+}
+
+.config-group .checkbox {
+  display: flex;
+  width: 25px;
+  height: 25px;
+}
+
+.config-main h2 {
+  margin-bottom: 25px;
+  font-size: 24px;
+  color: var(--white);
+}
+
+.config-group {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.config-group label {
+  margin-bottom: 6px;
+  font-weight: bold;
+}
+
+.config-group select,
+.config-group input[type='checkbox'] {
+  padding: 8px;
+  font-size: 16px;
+}
+
+.save-button {
+  padding: 12px 20px;
+  font-size: 16px;
+  background-color: var(--button-positive);
+  color: var(--white);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  color: var(--black);
+}
+
+.save-button:hover {
+  background-color: var(--button-positive-active);
+  color: var(--black);
+}
+
+.config-input input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 10px;
+  border: none;
+}
+
+.config-input-key {
+  max-width: 100px;
+  font-size: 12px;
+}
+
+.config-input-key {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+#remover-button {
+  background-color: var(--button-negative);
+}
+
+#remover-button:hover {
+  background-color: var(--button-negative-active);
+
+}

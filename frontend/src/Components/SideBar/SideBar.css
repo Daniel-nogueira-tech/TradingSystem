@@ -1,0 +1,45 @@
+.container-side {
+  position: sticky;
+  top: 15px;
+  width: 250px;
+  min-width: 250px;
+  height: 96vh;
+  background-color: var(--background-side);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 10px;
+  box-shadow: var(--box-shadow);
+  justify-content: space-between;
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+}
+
+.side-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--navbar-color);
+  border: none;
+  color: var(--white);
+  font-size: 16px;
+  padding: 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: 0.8s ease;
+  margin-bottom: 10px;
+  text-decoration: none;
+  top: -100;
+}
+
+.side-button:hover,
+.active {
+  background: var(--navbar-color-active);
+  transform: translateX(8px);
+}
+
+.icon {
+  font-size: 20px;
+}
