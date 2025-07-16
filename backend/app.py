@@ -61,7 +61,7 @@ def calcular_atr_movel(dados, periodo=14):
     return atrs
 
 
-def suavizar_atr(atrs, periodo=14):
+def suavizar_atr(atrs, periodo=90):
     if len(atrs) < periodo:
         return []
 
@@ -80,10 +80,10 @@ def filter_price_atr():
     try:
         # Busca os dados brutos de preço na Binance
         dados_brutos = client.get_klines(
-            symbol="BTCUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=500
+            symbol="ETHUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=500
         )
     except Exception as e:
-        return jsonify({"erro": f"Falha ao obter dados da Binance: {str(e)}"}), 500
+        return jsonify({"erro": f"Falha ao obter dados da Binance: {str(e)}"}), 1000
 
     # Formata os dados e extrai preços de fechamento e temposs
     dados = formatar_dados_brutos(dados_brutos)
@@ -91,8 +91,8 @@ def filter_price_atr():
     timestamps = [item["Tempo"] for item in dados]
 
     # Calcula o ATR suavizado
-    atrs = calcular_atr_movel(dados, periodo=365)
-    atr_suave = suavizar_atr(atrs, periodo=14)
+    atrs = calcular_atr_movel(dados, periodo=14)
+    atr_suave = suavizar_atr(atrs, periodo=90)
 
     if not atr_suave:
         return jsonify({"erro": "ATR não pôde ser calculado."}), 400
@@ -140,21 +140,19 @@ def filter_price_atr():
         # === ESTADO INICIAL ===
         # Detecta início de tendência
         if estado == "inicio":
-            if not movimento_adicionado and preco >= ponto_referencia + limite:
+            if not movimento_adicionado and preco > ponto_referencia + limite:
                 # Inicia tendência de alta
                 estado = "tendencia_alta"
                 topo = preco
-                ultimo_pivot_alta = None
                 ponto_referencia = preco
                 movimentos.append(
                     {"closeTime": tempo, "closePrice": preco, "tipo": "Tendência Alta"}
                 )
                 movimento_adicionado = True
-            elif not movimento_adicionado and preco <= ponto_referencia - limite:
+            elif not movimento_adicionado and preco < ponto_referencia - limite:
                 # Inicia tendência de baixa
                 estado = "tendencia_baixa"
                 fundo = preco
-                ultimo_pivot_baixa = None
                 ponto_referencia = preco
                 movimentos.append(
                     {"closeTime": tempo, "closePrice": preco, "tipo": "Tendência Baixa"}
@@ -185,24 +183,7 @@ def filter_price_atr():
                     {
                         "closeTime": tempo,
                         "closePrice": preco,
-                        "tipo": "Reação Natural (de alta)",
-                    }
-                )
-                movimento_adicionado = True
-            elif (
-                not movimento_adicionado
-                and ultimo_pivot_rally_alta is not None
-                and preco < ultimo_pivot_rally_alta - confirmar
-            ):
-                estado = "tendencia_baixa"
-                fundo = preco
-                ultimo_pivot_rally_alta = None
-                ultimo_pivot_rally_baixa = None
-                movimentos.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Tendência Baixa (reversão)",
+                        "tipo": "Reação Natural (Alta)",
                     }
                 )
                 movimento_adicionado = True
@@ -235,23 +216,6 @@ def filter_price_atr():
                     }
                 )
                 movimento_adicionado = True
-            elif (
-                not movimento_adicionado
-                and ultimo_pivot_rally_baixa is not None
-                and preco > ultimo_pivot_rally_baixa + confirmar
-            ):
-                estado = "tendencia_alta"
-                topo = preco
-                ultimo_pivot_rally_baixa = None
-                ultimo_pivot_rally_alta = None
-                ponto_referencia = preco
-                movimentos.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Tendência Alta (reversão)---",
-                    }
-                )
 
         # === REAÇÃO NATURAL ===
         elif estado == "reacao_natural":
@@ -326,7 +290,6 @@ def filter_price_atr():
                     # Continuação da reação
                     topo = preco
                     ultimo_pivot_rally_baixa = preco
-                    ultimo_pivot_alta = None
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -343,7 +306,6 @@ def filter_price_atr():
                 ):
                     # Rally Natural (respiro de baixa)
                     estado = "rally_natural"
-                    ultimo_pivot_baixa = preco
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -354,6 +316,7 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_rally_baixa is not None
@@ -515,6 +478,7 @@ def filter_price_atr():
                     movimento_adicionado = True
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
                     and preco > fundo + limite
                     and preco < ultimo_pivot_rally_baixa
                 ):
@@ -533,7 +497,11 @@ def filter_price_atr():
         # ======== Reação secundária ===========
         elif estado == "reacao_secundaria":
             if ultimo_pivot_alta is not None:
-                if not movimento_adicionado and preco < fundo:
+                if (
+                    not movimento_adicionado
+                    and preco < fundo
+                    and preco > ultimo_pivot_rally_alta
+                ):
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -564,6 +532,7 @@ def filter_price_atr():
                     movimento_adicionado = True
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
                     and preco < ultimo_pivot_rally_alta - confirmar
                 ):
                     estado = "tendencia_baixa"
@@ -581,7 +550,11 @@ def filter_price_atr():
 
             elif ultimo_pivot_baixa is not None:
                 # vindo de tendência de baixa
-                if not movimento_adicionado and preco > topo:
+                if (
+                    not movimento_adicionado
+                    and preco > topo
+                    and preco < ultimo_pivot_rally_baixa
+                ):
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -617,7 +590,7 @@ def filter_price_atr():
                     and preco > ultimo_pivot_rally_baixa + confirmar
                 ):
                     estado = "tendencia_alta"
-                    ultimo_pivot_alta = preco
+                    ultimo_pivot_alta = None
                     ultimo_pivot_rally_baixa = None
                     topo = preco
                     ponto_referencia = preco
@@ -661,10 +634,10 @@ def filter_price_atr():
                     )
                     movimento_adicionado = True
                 elif (
-                    not movimento_adicionado
-                    and ultimo_pivot_rally_alta is not None
-                    and preco > ultimo_pivot_rally_alta + confirmar
+                    not movimento_adicionado is not None
+                    and ultimo_pivot_reacao_sec_alta
                     and preco < ultimo_pivot_alta
+                    and preco > ultimo_pivot_reacao_sec_alta + confirmar
                 ):
                     # volta Rally natural
                     estado = "rally_natural"
@@ -674,7 +647,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Rally natural (alta)",
+                            "tipo": "Rally Natural (Alta)",
                         }
                     )
                     movimento_adicionado = True
@@ -697,6 +670,7 @@ def filter_price_atr():
 
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
                     and preco < ultimo_pivot_rally_alta - confirmar
                 ):
                     estado = "tendencia_baixa"
@@ -741,11 +715,12 @@ def filter_price_atr():
                     )
                     movimento_adicionado = True
                 elif (
-                    not movimento_adicionado
-                    and ultimo_pivot_rally_baixa is not None
-                    and preco < ultimo_pivot_rally_baixa - confirmar
+                    not movimento_adicionado is not None
+                    and ultimo_pivot_reacao_sec_baixa
                     and preco > ultimo_pivot_baixa
+                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
                 ):
+
                     # volta Rally natural
                     estado = "rally_natural"
                     fundo = preco
@@ -754,7 +729,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Rally natural (Baixa)",
+                            "tipo": "Rally Natural (Baixa)",
                         }
                     )
                     movimento_adicionado = True
@@ -778,10 +753,11 @@ def filter_price_atr():
 
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
                     and preco > ultimo_pivot_rally_baixa + confirmar
                 ):
                     estado = "tendencia_alta"
-                    fundo = preco
+                    topo = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
