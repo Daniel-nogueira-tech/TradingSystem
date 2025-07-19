@@ -61,7 +61,7 @@ def calcular_atr_movel(dados, periodo=14):
     return atrs
 
 
-def suavizar_atr(atrs, periodo=90):
+def suavizar_atr(atrs, periodo=180):
     if len(atrs) < periodo:
         return []
 
@@ -80,10 +80,10 @@ def filter_price_atr():
     try:
         # Busca os dados brutos de preço na Binance
         dados_brutos = client.get_klines(
-            symbol="ETHUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=500
+            symbol="BTCUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=1500
         )
     except Exception as e:
-        return jsonify({"erro": f"Falha ao obter dados da Binance: {str(e)}"}), 1000
+        return jsonify({"erro": f"Falha ao obter dados da Binance: {str(e)}"}), 500
 
     # Formata os dados e extrai preços de fechamento e temposs
     dados = formatar_dados_brutos(dados_brutos)
@@ -92,15 +92,23 @@ def filter_price_atr():
 
     # Calcula o ATR suavizado
     atrs = calcular_atr_movel(dados, periodo=14)
-    atr_suave = suavizar_atr(atrs, periodo=90)
+    atr_suave = suavizar_atr(atrs, periodo=180)
 
     if not atr_suave:
         return jsonify({"erro": "ATR não pôde ser calculado."}), 400
 
     # Define os limites com base no ATR
     atr_ultima_suave = atr_suave[-1]["ATR_Suavizado"]
-    limite = int(atr_ultima_suave * 4)
-    confirmar = limite / 2
+    atr_mult = atr_ultima_suave * 4
+
+    # Aredonda os valores
+    round_atr = round(atr_mult, 2)
+    confir = round_atr / 2
+    confir_round = round(confir, 2)
+
+    limite = round_atr
+    confirmar = confir_round
+
     print(
         f"ATR Suavizado: {atr_ultima_suave:.2f} | Limite: {limite} | Confirmar: {confirmar}"
     )
@@ -111,6 +119,7 @@ def filter_price_atr():
     topo = closes[0]
     fundo = closes[0]
     ponto_referencia = closes[0]
+    tendencia_atual = None
     ultimo_pivot_alta = None
     ultimo_pivot_baixa = None
     ultimo_pivot_reacao_sec_alta = None
@@ -143,6 +152,7 @@ def filter_price_atr():
             if not movimento_adicionado and preco > ponto_referencia + limite:
                 # Inicia tendência de alta
                 estado = "tendencia_alta"
+                tendencia_atual = "Alta"
                 topo = preco
                 ponto_referencia = preco
                 movimentos.append(
@@ -152,6 +162,7 @@ def filter_price_atr():
             elif not movimento_adicionado and preco < ponto_referencia - limite:
                 # Inicia tendência de baixa
                 estado = "tendencia_baixa"
+                tendencia_atual = "Baixa"
                 fundo = preco
                 ponto_referencia = preco
                 movimentos.append(
@@ -212,14 +223,14 @@ def filter_price_atr():
                     {
                         "closeTime": tempo,
                         "closePrice": preco,
-                        "tipo": "Reação Natural (de baixa)",
+                        "tipo": "Reação Natural (Baixa)",
                     }
                 )
                 movimento_adicionado = True
 
         # === REAÇÃO NATURAL ===
         elif estado == "reacao_natural":
-            if ultimo_pivot_alta is not None:
+            if tendencia_atual == "Alta":
                 # Vindo de tendência de alta
                 if not movimento_adicionado and preco < fundo:
                     # Continuação da reação
@@ -251,9 +262,10 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+                    print(f"ultimo pivo de alta")
                 elif not movimento_adicionado and preco > ultimo_pivot_alta + confirmar:
                     estado = "tendencia_alta"
-                    ultimo_pivot_alta = None
+                    ultimo_pivot_alta = preco
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -270,10 +282,12 @@ def filter_price_atr():
                     and ultimo_pivot_rally_alta is not None
                     and preco < ultimo_pivot_rally_alta - confirmar
                 ):
+
                     # Reversão para tendência de baixa
                     estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
                     fundo = preco
-                    ultimo_pivot_baixa = None
+                    ultimo_pivot_baixa = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -283,8 +297,7 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
-
-            elif ultimo_pivot_baixa is not None:
+            elif tendencia_atual == "Baixa":
                 # Vindo de tendência baixa
                 if not movimento_adicionado and preco > topo:
                     # Continuação da reação
@@ -319,31 +332,13 @@ def filter_price_atr():
 
                 elif (
                     not movimento_adicionado
-                    and ultimo_pivot_rally_baixa is not None
-                    and preco > ultimo_pivot_rally_baixa + confirmar
-                ):
-                    # Reversão para tendência de alta
-                    estado = "tendencia_alta"
-                    topo = preco
-                    ultimo_pivot_alta = None
-                    ponto_referencia = preco
-                    movimentos.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": preco,
-                            "tipo": "Tendência Alta (reversão)",
-                        }
-                    )
-                    movimento_adicionado = True
-                elif (
-                    not movimento_adicionado
                     and ultimo_pivot_baixa is not None
                     and preco < ultimo_pivot_baixa - confirmar
                 ):
                     # Reversão para tendência de baixa
                     estado = "tendencia_baixa"
                     fundo = preco
-                    ultimo_pivot_baixa = None
+                    ultimo_pivot_baixa = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -353,10 +348,28 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > ultimo_pivot_reacao_sec_baixa
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
 
         # === RALLY NATURAL ===
         elif estado == "rally_natural":
-            if ultimo_pivot_alta is not None:
+            if tendencia_atual == "Alta":
                 # Vindo de tendência alta
                 if (
                     not movimento_adicionado
@@ -375,10 +388,14 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
-                elif not movimento_adicionado and preco > ultimo_pivot_alta + confirmar:
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
                     # Retomada da tendência de alta
                     estado = "tendencia_alta"
-                    ultimo_pivot_alta = None
+                    ultimo_pivot_alta = preco
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -396,8 +413,10 @@ def filter_price_atr():
                 ):
                     # Reversão para tendência de baixa
                     estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
                     fundo = preco
-                    ultimo_pivot_baixa = None
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
                     movimentos.append(
                         {
                             "closeTime": tempo,
@@ -423,7 +442,7 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
-            elif ultimo_pivot_baixa is not None:
+            elif tendencia_atual == "Baixa":
                 # Vindo de tendência baixa
                 if (
                     not movimento_adicionado
@@ -447,7 +466,7 @@ def filter_price_atr():
                 ):
                     # Retomada da tendência de baixa
                     fundo = preco
-                    ultimo_pivot_baixa = None
+                    ultimo_pivot_baixa = preco
                     ponto_referencia = preco
                     estado = "tendencia_baixa"
                     movimentos.append(
@@ -465,8 +484,9 @@ def filter_price_atr():
                 ):
                     # Reversão para tendência de alta
                     estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
                     topo = preco
-                    ultimo_pivot_alta = None
+                    ultimo_pivot_alta = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -496,22 +516,19 @@ def filter_price_atr():
 
         # ======== Reação secundária ===========
         elif estado == "reacao_secundaria":
-            if ultimo_pivot_alta is not None:
-                if (
-                    not movimento_adicionado
-                    and preco < fundo
-                    and preco > ultimo_pivot_rally_alta
-                ):
+            if tendencia_atual == "Alta":
+                if not movimento_adicionado and preco < fundo:
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária (fundo)",
+                            "tipo": "Reação secundária (Fundo)",
                         }
                     )
                     movimento_adicionado = True
+
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_alta is not None
@@ -530,13 +547,31 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retorno)",
+                        }
+                    )
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
                     and preco < ultimo_pivot_rally_alta - confirmar
                 ):
                     estado = "tendencia_baixa"
-                    ultimo_pivot_baixa = None
+                    tendencia_atual = "Baixa"
+                    ultimo_pivot_rally_alta = preco
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -548,20 +583,16 @@ def filter_price_atr():
                     )
                     movimento_adicionado = True
 
-            elif ultimo_pivot_baixa is not None:
+            elif tendencia_atual == "Baixa":
                 # vindo de tendência de baixa
-                if (
-                    not movimento_adicionado
-                    and preco > topo
-                    and preco < ultimo_pivot_rally_baixa
-                ):
+                if not movimento_adicionado and preco > topo:
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária (Topo)",
+                            "tipo": "Reação secundária (topo)",
                         }
                     )
                     movimento_adicionado = True
@@ -586,12 +617,29 @@ def filter_price_atr():
 
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and ultimo_pivot_baixa
+                    and preco < ultimo_pivot_baixa - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    ultimo_pivot_baixa = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (retomada)",
+                        }
+                    )
+                elif (
+                    not movimento_adicionado
                     and ultimo_pivot_rally_baixa is not None
                     and preco > ultimo_pivot_rally_baixa + confirmar
                 ):
                     estado = "tendencia_alta"
-                    ultimo_pivot_alta = None
-                    ultimo_pivot_rally_baixa = None
+                    tendencia_atual = "Alta"
+                    ultimo_pivot_rally_baixa = preco
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -605,7 +653,7 @@ def filter_price_atr():
 
             # ======== Reação secundária ===========
         elif estado == "rally_secundario":
-            if ultimo_pivot_alta is not None:
+            if tendencia_atual == "Alta":
                 if not movimento_adicionado and preco > topo:
                     topo = preco
                     ponto_referencia = preco
@@ -619,6 +667,7 @@ def filter_price_atr():
                     movimento_adicionado = True
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
                     and preco < topo - limite
                     and preco > ultimo_pivot_reacao_sec_alta
                 ):
@@ -633,13 +682,13 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+                    # retorno do rally secundario para reacao
                 elif (
-                    not movimento_adicionado is not None
-                    and ultimo_pivot_reacao_sec_alta
-                    and preco < ultimo_pivot_alta
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_alta is not None
                     and preco > ultimo_pivot_reacao_sec_alta + confirmar
+                    and preco < ultimo_pivot_alta
                 ):
-                    # volta Rally natural
                     estado = "rally_natural"
                     topo = preco
                     ponto_referencia = preco
@@ -647,12 +696,14 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Rally Natural (Alta)",
+                            "tipo": "Rally Natural (retorno)",
                         }
                     )
                     movimento_adicionado = True
+
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
                     and preco < topo - limite
                     and preco > ultimo_pivot_rally_alta
                 ):
@@ -674,6 +725,7 @@ def filter_price_atr():
                     and preco < ultimo_pivot_rally_alta - confirmar
                 ):
                     estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -684,8 +736,9 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+                    print(f"ultimo rally: ", {ultimo_pivot_rally_alta})
 
-            elif ultimo_pivot_baixa is not None:
+            elif tendencia_atual == "Baixa":
                 # vindo de tendência de baixa
                 if not movimento_adicionado and preco < fundo:
                     fundo = preco
@@ -700,6 +753,7 @@ def filter_price_atr():
                     movimento_adicionado = True
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
                     and preco > fundo + limite
                     and preco < ultimo_pivot_reacao_sec_baixa
                 ):
@@ -714,9 +768,28 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+                    # retorno do rally secundario para reacao
                 elif (
-                    not movimento_adicionado is not None
-                    and ultimo_pivot_reacao_sec_baixa
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                    and preco > ultimo_pivot_baixa
+                ):
+                    estado = "rally_natural"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+                    print(f"reacao sec :", {ultimo_pivot_reacao_sec_baixa})
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
                     and preco > ultimo_pivot_baixa
                     and preco < ultimo_pivot_reacao_sec_baixa - confirmar
                 ):
@@ -736,6 +809,7 @@ def filter_price_atr():
 
                 elif (
                     not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
                     and preco > fundo + limite
                     and preco < ultimo_pivot_rally_baixa
                 ):
@@ -757,6 +831,7 @@ def filter_price_atr():
                     and preco > ultimo_pivot_rally_baixa + confirmar
                 ):
                     estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -777,45 +852,65 @@ def filter_price_atr():
     return jsonify(movimentos)
 
 
-"""@app.route('/api/filter_price_atr_secondy', methods=["GET", "POST"])
+@app.route("/api/filter_price_atr_secondy", methods=["GET", "POST"])
 def filter_price_atr_secondy():
     try:
+        # Busca os dados brutos de preço na Binance
         dados_brutos = client.get_klines(
-            symbol="ETHUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=5000
+            symbol="ETHUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=1500
         )
     except Exception as e:
         return jsonify({"erro": f"Falha ao obter dados da Binance: {str(e)}"}), 500
 
+    # Formata os dados e extrai preços de fechamento e temposs
     dados = formatar_dados_brutos(dados_brutos)
     closes = [item["Fechamento"] for item in dados]
     timestamps = [item["Tempo"] for item in dados]
 
-    atrs = calcular_atr_movel(dados, periodo=30)
-    atr_suave = suavizar_atr(atrs, periodo=30)
+    # Calcula o ATR suavizado
+    atrs = calcular_atr_movel(dados, periodo=14)
+    atr_suave = suavizar_atr(atrs, periodo=180)
 
     if not atr_suave:
         return jsonify({"erro": "ATR não pôde ser calculado."}), 400
-    
-    atr_ultima_suave = atr_suave[-1]["ATR_Suavizado"]
-    limite = int(atr_ultima_suave * 5)
-    confirmar = limite / 2
-    print(f"ATR Suavizado: {atr_ultima_suave:.2f} | Limite: {limite} | Confirmar: {confirmar}")
 
+    # Define os limites com base no ATR
+    atr_ultima_suave = atr_suave[-1]["ATR_Suavizado"]
+    atr_mult = atr_ultima_suave * 4
+
+    # Aredonda os valores
+    round_atr = round(atr_mult, 2)
+    confir = round_atr / 2
+    confir_round = round(confir, 2)
+
+    limite = round_atr
+    confirmar = confir_round
+    print(
+        f"ATR Suavizado: {atr_ultima_suave:.2f} | Limite: {limite} | Confirmar: {confirmar}"
+    )
+
+    # Inicializa variáveis de controle
     movimentos = []
     estado = "inicio"
     topo = closes[0]
     fundo = closes[0]
     ponto_referencia = closes[0]
+    tendencia_atual = None
     ultimo_pivot_alta = None
     ultimo_pivot_baixa = None
-    ultimo_pivot_reacao_alta = None
-    ultimo_pivot_reacao_baixa = None
+    ultimo_pivot_reacao_sec_alta = None
+    ultimo_pivot_reacao_sec_baixa = None
+    ultimo_pivot_rally_alta = closes[0]
+    ultimo_pivot_rally_baixa = closes[0]
 
-    movimentos.append({
-        "closeTime": timestamps[0],
-        "closePrice": ponto_referencia,
-        "tipo": "Rally Natural (inicial)"
-    })
+    # Primeiro ponto é sempre um Rally Natural Inicial
+    movimentos.append(
+        {
+            "closeTime": timestamps[0],
+            "closePrice": ponto_referencia,
+            "tipo": "Rally Natural (inicial)",
+        }
+    )
 
     for i in range(1, len(closes)):
         preco = closes[i]
@@ -823,231 +918,1531 @@ def filter_price_atr_secondy():
         variacao = preco - ponto_referencia
         movimento_adicionado = False  # Controle para evitar duplicação
 
-        print(f"→ [{estado.upper()}] Preço: {preco} | Ref: {ponto_referencia} | Var: {variacao:.2f} | Limite: {limite}")
+        print(
+            f"→ [{estado.upper()}] Preço: {preco} | Ref: {ponto_referencia} | Var: {variacao:.2f} | Limite: {limite}"
+        )
 
+        # === ESTADO INICIAL ===
+        # Detecta início de tendência
         if estado == "inicio":
-            if preco >= ponto_referencia + limite:
+            if not movimento_adicionado and preco > ponto_referencia + limite:
+                # Inicia tendência de alta
                 estado = "tendencia_alta"
+                tendencia_atual = "Alta"
                 topo = preco
-                ultimo_pivot_alta = preco
                 ponto_referencia = preco
-                movimentos.append({
-                    "closeTime": tempo,
-                    "closePrice": preco,
-                    "tipo": "Tendência Alta (topo)"
-                })
+                movimentos.append(
+                    {"closeTime": tempo, "closePrice": preco, "tipo": "Tendência Alta"}
+                )
                 movimento_adicionado = True
-            elif preco <= ponto_referencia - limite:
+            elif not movimento_adicionado and preco < ponto_referencia - limite:
+                # Inicia tendência de baixa
                 estado = "tendencia_baixa"
+                tendencia_atual = "Baixa"
                 fundo = preco
-                ultimo_pivot_baixa = preco
                 ponto_referencia = preco
-                movimentos.append({
-                    "closeTime": tempo,
-                    "closePrice": preco,
-                    "tipo": "Tendência Baixa (fundo)"
-                })
+                movimentos.append(
+                    {"closeTime": tempo, "closePrice": preco, "tipo": "Tendência Baixa"}
+                )
                 movimento_adicionado = True
 
-        elif estado == "tendencia_alta":
+        # === TENDÊNCIA DE ALTA ===
+        elif not movimento_adicionado and estado == "tendencia_alta":
             if preco > topo:
+                # Continua tendência de alta
                 topo = preco
                 ultimo_pivot_alta = preco
                 ponto_referencia = preco
-                movimentos.append({
-                    "closeTime": tempo,
-                    "closePrice": preco,
-                    "tipo": "Tendência Alta (topo)"
-                })
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Tendência Alta (topo)",
+                    }
+                )
                 movimento_adicionado = True
-            elif preco <= topo - limite:
+            elif not movimento_adicionado and preco < topo - limite:
+                # Transição para reação natural (correção)
                 estado = "reacao_natural"
                 fundo = preco
                 ponto_referencia = preco
-                movimentos.append({
-                    "closeTime": tempo,
-                    "closePrice": preco,
-                    "tipo": "Reação Natural (fundo)"
-                })
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Reação Natural (Alta)",
+                    }
+                )
                 movimento_adicionado = True
 
-        elif estado == "tendencia_baixa":
+        # === TENDÊNCIA DE BAIXA ===
+        elif not movimento_adicionado and estado == "tendencia_baixa":
             if preco < fundo:
+                # Continua tendência de baixa
                 fundo = preco
                 ultimo_pivot_baixa = preco
                 ponto_referencia = preco
-                movimentos.append({
-                    "closeTime": tempo,
-                    "closePrice": preco,
-                    "tipo": "Tendência Baixa (fundo)"
-                })
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Tendência Baixa (fundo)",
+                    }
+                )
                 movimento_adicionado = True
-            elif preco >= fundo + limite:
+            elif not movimento_adicionado and preco > fundo + limite:
+                # Transição para reação natural (correção)
                 estado = "reacao_natural"
                 topo = preco
-                ultimo_pivot_reacao_baixa = preco
                 ponto_referencia = preco
-                movimentos.append({
-                    "closeTime": tempo,
-                    "closePrice": preco,
-                    "tipo": "Reação Natural (topo)"
-                })
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Reação Natural (Baixa)",
+                    }
+                )
                 movimento_adicionado = True
 
+        # === REAÇÃO NATURAL ===
         elif estado == "reacao_natural":
-            if ultimo_pivot_alta is not None:  # Vindo de tendência alta
+            if tendencia_atual == "Alta":
+                # Vindo de tendência de alta
                 if not movimento_adicionado and preco < fundo:
+                    # Continuação da reação
                     fundo = preco
-                    ultimo_pivot_reacao_alta = preco
+                    ultimo_pivot_rally_alta = preco
                     ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Reação Natural (fundo)"
-                    })
-                    movimento_adicionado = True
-                if ultimo_pivot_reacao_alta is not None and preco < ultimo_pivot_reacao_alta - (limite - confirmar):
-                    estado = "tendencia_baixa"
-                    ultimo_pivot_baixa = preco
-                    ultimo_pivot_alta = None
-                    if not movimento_adicionado:
-                        movimentos.append({
+                    movimentos.append(
+                        {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Baixa (reversão)"
-                        })
-                        movimento_adicionado = True
-                elif not movimento_adicionado and preco > fundo + limite:
+                            "tipo": "Reação Natural (fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_alta
+                ):
+                    # Rally Natural (recuperacao)
                     estado = "rally_natural"
                     topo = preco
                     ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Rally Natural (topo)"
-                    })
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (Alta)",
+                        }
+                    )
                     movimento_adicionado = True
-            elif ultimo_pivot_baixa is not None:  # Vindo de tendência baixa
-                if not movimento_adicionado and preco > topo:
-                    topo = preco
-                    ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Reação Natural (topo)"
-                    })
-                    movimento_adicionado = True
-                if ultimo_pivot_reacao_baixa is not None and preco > ultimo_pivot_reacao_baixa + (limite + confirmar):
+                    print(f"ultimo pivo de alta")
+                elif not movimento_adicionado and preco > ultimo_pivot_alta + confirmar:
                     estado = "tendencia_alta"
                     ultimo_pivot_alta = preco
-                    ultimo_pivot_baixa = None
-                    if not movimento_adicionado:
-                        movimentos.append({
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Alta (reversão)"
-                        })
-                        movimento_adicionado = True
-                elif not movimento_adicionado and preco < topo - limite:
+                            "tipo": "Tendência Alta (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+            elif tendencia_atual == "Baixa":
+                # Vindo de tendência baixa
+                if not movimento_adicionado and preco > topo:
+                    # Continuação da reação
+                    topo = preco
+                    ultimo_pivot_rally_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação Natural (topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_baixa
+                ):
+                    # Rally Natural (respiro de baixa)
                     estado = "rally_natural"
                     fundo = preco
                     ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Rally Natural (fundo)"
-                    })
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (Baixa)",
+                        }
+                    )
                     movimento_adicionado = True
 
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and preco < ultimo_pivot_baixa - confirmar
+                ):
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > ultimo_pivot_reacao_sec_baixa
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+        # === RALLY NATURAL ===
         elif estado == "rally_natural":
-            if ultimo_pivot_alta is not None:  # Vindo de tendência alta
-                if not movimento_adicionado and preco > topo:
+            if tendencia_atual == "Alta":
+                # Vindo de tendência alta
+                if (
+                    not movimento_adicionado
+                    and preco > topo
+                    and preco < ultimo_pivot_alta
+                ):
+                    # Continuação do rally
+                    topo = preco
+                    ultimo_pivot_reacao_sec_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    # Retomada da tendência de alta
+                    estado = "tendencia_alta"
+                    ultimo_pivot_alta = preco
                     topo = preco
                     ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Rally Natural (topo)"
-                    })
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retomada)",
+                        }
+                    )
                     movimento_adicionado = True
-                if preco > ultimo_pivot_alta:
-                    estado = "tendencia_alta"
-                    if not movimento_adicionado:
-                        movimentos.append({
-                            "closeTime": tempo,
-                            "closePrice": preco,
-                            "tipo": "Tendência Alta (retomada)"
-                        })
-                        movimento_adicionado = True
-                elif ultimo_pivot_reacao_alta is not None and preco < ultimo_pivot_reacao_alta - limite:
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    # Reversão para tendência de baixa
                     estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
                     ultimo_pivot_baixa = preco
-                    ultimo_pivot_alta = None
-                    if not movimento_adicionado:
-                        movimentos.append({
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Baixa (reversão)"
-                        })
-                        movimento_adicionado = True
-                elif not movimento_adicionado and preco < fundo:
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_rally_alta
+                ):
+                    estado = "reacao_secundaria"
                     fundo = preco
                     ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Rally Natural (fundo)"
-                    })
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
                     movimento_adicionado = True
-            elif ultimo_pivot_baixa is not None:  # Vindo de tendência baixa
+            elif tendencia_atual == "Baixa":
+                # Vindo de tendência baixa
+                if (
+                    not movimento_adicionado
+                    and preco < fundo
+                    and preco > ultimo_pivot_baixa
+                ):
+                    # Continuação do rally
+                    fundo = preco
+                    ponto_referencia = preco
+                    ultimo_pivot_reacao_sec_baixa = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado and preco < ultimo_pivot_baixa - confirmar
+                ):
+                    # Retomada da tendência de baixa
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    estado = "tendencia_baixa"
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    # Reversão para tendência de alta
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_rally_baixa
+                ):
+                    estado = "reacao_secundaria"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
+                    movimento_adicionado = True
+
+        # ======== Reação secundária ===========
+        elif estado == "reacao_secundaria":
+            if tendencia_atual == "Alta":
                 if not movimento_adicionado and preco < fundo:
                     fundo = preco
                     ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Rally Natural (fundo)"
-                    })
-                    movimento_adicionado = True
-                if preco < ultimo_pivot_baixa:
-                    estado = "tendencia_baixa"
-                    if not movimento_adicionado:
-                        movimentos.append({
+                    movimentos.append(
+                        {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Baixa (retomada)"
-                        })
-                        movimento_adicionado = True
-                elif not movimento_adicionado and preco > topo:
+                            "tipo": "Reação secundária (Fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_alta is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_reacao_sec_alta
+                ):
+                    #  volta ao rally
+                    estado = "rally_secundario"
                     topo = preco
                     ponto_referencia = preco
-                    movimentos.append({
-                        "closeTime": tempo,
-                        "closePrice": preco,
-                        "tipo": "Rally Natural (topo)"
-                    })
-                    movimento_adicionado = True
-                elif ultimo_pivot_reacao_baixa is not None and preco > ultimo_pivot_reacao_baixa + limite:
-                    estado = "tendencia_alta"
-                    ultimo_pivot_alta = preco
-                    ultimo_pivot_baixa = None
-                    if not movimento_adicionado:
-                        movimentos.append({
+                    movimentos.append(
+                        {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Alta (reversão)"
-                        })
-                        movimento_adicionado = True
+                            "tipo": "Rally secundário (Alta)",
+                        }
+                    )
+                    movimento_adicionado = True
 
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retorno)",
+                        }
+                    )
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    ultimo_pivot_rally_alta = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+            elif tendencia_atual == "Baixa":
+                # vindo de tendência de baixa
+                if not movimento_adicionado and preco > topo:
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária (topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_reacao_sec_baixa
+                ):
+                    #  volta ao rally
+                    estado = "rally_secundario"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally secundário (Baixa)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and ultimo_pivot_baixa
+                    and preco < ultimo_pivot_baixa - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    ultimo_pivot_baixa = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (retomada)",
+                        }
+                    )
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    ultimo_pivot_rally_baixa = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+            # ======== Reação secundária ===========
+        elif estado == "rally_secundario":
+            if tendencia_atual == "Alta":
+                if not movimento_adicionado and preco > topo:
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally secundária (Topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_reacao_sec_alta
+                ):
+                    estado = "reacao_secundaria"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
+                    movimento_adicionado = True
+                    # retorno do rally secundario para reacao
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_alta is not None
+                    and preco > ultimo_pivot_reacao_sec_alta + confirmar
+                    and preco < ultimo_pivot_alta
+                ):
+                    estado = "rally_natural"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_rally_alta
+                ):
+                    estado = "reacao_secundaria"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                    print(f"ultimo rally: ", {ultimo_pivot_rally_alta})
+
+            elif tendencia_atual == "Baixa":
+                # vindo de tendência de baixa
+                if not movimento_adicionado and preco < fundo:
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally secundária (Fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_reacao_sec_baixa
+                ):
+                    estado = "reacao_secundaria"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
+                    movimento_adicionado = True
+                    # retorno do rally secundario para reacao
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                    and preco > ultimo_pivot_baixa
+                ):
+                    estado = "rally_natural"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+                    print(f"reacao sec :", {ultimo_pivot_reacao_sec_baixa})
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > ultimo_pivot_baixa
+                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                ):
+
+                    # volta Rally natural
+                    estado = "rally_natural"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (Baixa)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_rally_baixa
+                ):
+                    estado = "reacao_secundaria"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
 
     logger.info("\n=== MOVIMENTOS CLASSIFICADOS ===")
     for p in movimentos:
-        logger.info(f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}")
+        logger.info(
+            f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}"
+        )
     logger.info("=================================\n")
 
     return jsonify(movimentos)
 
-"""
+
+@app.route("/api/filter_price_key", methods=["GET", "POST"])
+def filter_price_key():
+    print(">>> ROTA /api/filter_price_key CHAMADA")
+    try:
+        dados_btc_bruto = client.get_klines(
+            symbol="BTCUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=1500
+        )
+        dados_eth_bruto = client.get_klines(
+            symbol="ETHUSDT", interval=Client.KLINE_INTERVAL_1HOUR, limit=1500
+        )
+    except Exception as e:
+        return jsonify({"erro": f"Falha ao obter dados da Binance: {str(e)}"}), 500
+
+    dados_btc = formatar_dados_brutos(dados_btc_bruto)
+    dados_eth = formatar_dados_brutos(dados_eth_bruto)
+
+    qtd_candles = min(len(dados_btc), len(dados_eth))
+    movimentos = []
+
+    for i in range(qtd_candles):
+        timestamp = dados_btc[i]["Tempo"]
+        fechamento_btc = dados_btc[i]["Fechamento"]
+        fechamento_eth = dados_eth[i]["Fechamento"]
+        soma = fechamento_btc / 25 + fechamento_eth
+
+        movimentos.append(
+            {
+                "closeTime": timestamp,
+                "closePrice": soma,
+                "tipo": "Soma BTC + ETH",
+                "Tempo": timestamp,
+                "Maximo": dados_btc[i]["Maximo"] / 25 + dados_eth[i]["Maximo"],
+                "Minimo": dados_btc[i]["Minimo"] / 25 + dados_eth[i]["Minimo"],
+                "Fechamento": soma,
+            }
+        )
+    dados = movimentos
+    closes = [item["closePrice"] for item in dados]
+    timestamps = [item["closeTime"] for item in dados]
+
+    # Calcula o ATR suavizado
+    atrs = calcular_atr_movel(dados, periodo=14)
+    atr_suave = suavizar_atr(atrs, periodo=180)
+
+    if not atr_suave:
+        return jsonify({"erro": "ATR não pôde ser calculado."}), 400
+
+    atr_ultima_suave = atr_suave[-1]["ATR_Suavizado"]
+    atr_mult = atr_ultima_suave * 4
+
+    # Aredonda os valores
+    round_atr = round(atr_mult, 2)
+    confir = round_atr / 2
+    confir_round = round(confir, 2)
+
+    limite = round_atr
+    confirmar = confir_round
+
+    print(
+        f"ATR Suavizado: {atr_ultima_suave:.2f} | Limite: {limite} | Confirmar: {confirmar}"
+    )
+
+    # === Inicialização dos estados ===
+    movimentos = []
+    estado = "inicio"
+    topo = fundo = ponto_referencia = closes[0]
+    tendencia_atual = None
+
+    movimentos.append(
+        {
+            "closeTime": timestamps[0],
+            "closePrice": ponto_referencia,
+            "tipo": "Rally Natural (inicial)",
+        }
+    )
+
+    # Inicializa variáveis de controle
+    movimentos = []
+    estado = "inicio"
+    topo = closes[0]
+    fundo = closes[0]
+    ponto_referencia = closes[0]
+    tendencia_atual = None
+    ultimo_pivot_alta = None
+    ultimo_pivot_baixa = None
+    ultimo_pivot_reacao_sec_alta = None
+    ultimo_pivot_reacao_sec_baixa = None
+    ultimo_pivot_rally_alta = closes[0]
+    ultimo_pivot_rally_baixa = closes[0]
+
+    # Primeiro ponto é sempre um Rally Natural Inicial
+    movimentos.append(
+        {
+            "closeTime": timestamps[0],
+            "closePrice": ponto_referencia,
+            "tipo": "Rally Natural (inicial)",
+        }
+    )
+
+    for i in range(1, len(closes)):
+        preco = closes[i]
+        tempo = timestamps[i]
+        variacao = preco - ponto_referencia
+        movimento_adicionado = False  # Controle para evitar duplicação
+
+        print(
+            f"→ [{estado.upper()}] Preço: {preco} | Ref: {ponto_referencia} | Var: {variacao:.2f} | Limite: {limite}"
+        )
+
+        # === ESTADO INICIAL ===
+        # Detecta início de tendência
+        if estado == "inicio":
+            if not movimento_adicionado and preco > ponto_referencia + limite:
+                # Inicia tendência de alta
+                estado = "tendencia_alta"
+                tendencia_atual = "Alta"
+                topo = preco
+                ponto_referencia = preco
+                movimentos.append(
+                    {"closeTime": tempo, "closePrice": preco, "tipo": "Tendência Alta"}
+                )
+                movimento_adicionado = True
+            elif not movimento_adicionado and preco < ponto_referencia - limite:
+                # Inicia tendência de baixa
+                estado = "tendencia_baixa"
+                tendencia_atual = "Baixa"
+                fundo = preco
+                ponto_referencia = preco
+                movimentos.append(
+                    {"closeTime": tempo, "closePrice": preco, "tipo": "Tendência Baixa"}
+                )
+                movimento_adicionado = True
+
+        # === TENDÊNCIA DE ALTA ===
+        elif not movimento_adicionado and estado == "tendencia_alta":
+            if preco > topo:
+                # Continua tendência de alta
+                topo = preco
+                ultimo_pivot_alta = preco
+                ponto_referencia = preco
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Tendência Alta (topo)",
+                    }
+                )
+                movimento_adicionado = True
+            elif not movimento_adicionado and preco < topo - limite:
+                # Transição para reação natural (correção)
+                estado = "reacao_natural"
+                fundo = preco
+                ponto_referencia = preco
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Reação Natural (Alta)",
+                    }
+                )
+                movimento_adicionado = True
+
+        # === TENDÊNCIA DE BAIXA ===
+        elif not movimento_adicionado and estado == "tendencia_baixa":
+            if preco < fundo:
+                # Continua tendência de baixa
+                fundo = preco
+                ultimo_pivot_baixa = preco
+                ponto_referencia = preco
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Tendência Baixa (fundo)",
+                    }
+                )
+                movimento_adicionado = True
+            elif not movimento_adicionado and preco > fundo + limite:
+                # Transição para reação natural (correção)
+                estado = "reacao_natural"
+                topo = preco
+                ponto_referencia = preco
+                movimentos.append(
+                    {
+                        "closeTime": tempo,
+                        "closePrice": preco,
+                        "tipo": "Reação Natural (Baixa)",
+                    }
+                )
+                movimento_adicionado = True
+
+        # === REAÇÃO NATURAL ===
+        elif estado == "reacao_natural":
+            if tendencia_atual == "Alta":
+                # Vindo de tendência de alta
+                if not movimento_adicionado and preco < fundo:
+                    # Continuação da reação
+                    fundo = preco
+                    ultimo_pivot_rally_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação Natural (fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_alta
+                ):
+                    # Rally Natural (recuperacao)
+                    estado = "rally_natural"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (Alta)",
+                        }
+                    )
+                    movimento_adicionado = True
+                    print(f"ultimo pivo de alta")
+                elif not movimento_adicionado and preco > ultimo_pivot_alta + confirmar:
+                    estado = "tendencia_alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+            elif tendencia_atual == "Baixa":
+                # Vindo de tendência baixa
+                if not movimento_adicionado and preco > topo:
+                    # Continuação da reação
+                    topo = preco
+                    ultimo_pivot_rally_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação Natural (topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_baixa
+                ):
+                    # Rally Natural (respiro de baixa)
+                    estado = "rally_natural"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (Baixa)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and preco < ultimo_pivot_baixa - confirmar
+                ):
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > ultimo_pivot_reacao_sec_baixa
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+        # === RALLY NATURAL ===
+        elif estado == "rally_natural":
+            if tendencia_atual == "Alta":
+                # Vindo de tendência alta
+                if (
+                    not movimento_adicionado
+                    and preco > topo
+                    and preco < ultimo_pivot_alta
+                ):
+                    # Continuação do rally
+                    topo = preco
+                    ultimo_pivot_reacao_sec_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    # Retomada da tendência de alta
+                    estado = "tendencia_alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_rally_alta
+                ):
+                    estado = "reacao_secundaria"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
+                    movimento_adicionado = True
+            elif tendencia_atual == "Baixa":
+                # Vindo de tendência baixa
+                if (
+                    not movimento_adicionado
+                    and preco < fundo
+                    and preco > ultimo_pivot_baixa
+                ):
+                    # Continuação do rally
+                    fundo = preco
+                    ponto_referencia = preco
+                    ultimo_pivot_reacao_sec_baixa = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado and preco < ultimo_pivot_baixa - confirmar
+                ):
+                    # Retomada da tendência de baixa
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    estado = "tendencia_baixa"
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    # Reversão para tendência de alta
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_rally_baixa
+                ):
+                    estado = "reacao_secundaria"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
+                    movimento_adicionado = True
+
+        # ======== Reação secundária ===========
+        elif estado == "reacao_secundaria":
+            if tendencia_atual == "Alta":
+                if not movimento_adicionado and preco < fundo:
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária (Fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_alta is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_reacao_sec_alta
+                ):
+                    #  volta ao rally
+                    estado = "rally_secundario"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally secundário (Alta)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retorno)",
+                        }
+                    )
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    ultimo_pivot_rally_alta = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+            elif tendencia_atual == "Baixa":
+                # vindo de tendência de baixa
+                if not movimento_adicionado and preco > topo:
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária (topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_reacao_sec_baixa
+                ):
+                    #  volta ao rally
+                    estado = "rally_secundario"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally secundário (Baixa)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and ultimo_pivot_baixa
+                    and preco < ultimo_pivot_baixa - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    ultimo_pivot_baixa = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (retomada)",
+                        }
+                    )
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    ultimo_pivot_rally_baixa = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+            # ======== Reação secundária ===========
+        elif estado == "rally_secundario":
+            if tendencia_atual == "Alta":
+                if not movimento_adicionado and preco > topo:
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally secundária (Topo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_reacao_sec_alta
+                ):
+                    estado = "reacao_secundaria"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
+                    movimento_adicionado = True
+                    # retorno do rally secundario para reacao
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_alta is not None
+                    and preco > ultimo_pivot_reacao_sec_alta + confirmar
+                    and preco < ultimo_pivot_alta
+                ):
+                    estado = "rally_natural"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < topo - limite
+                    and preco > ultimo_pivot_rally_alta
+                ):
+                    estado = "reacao_secundaria"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                    print(f"ultimo rally: ", {ultimo_pivot_rally_alta})
+
+            elif tendencia_atual == "Baixa":
+                # vindo de tendência de baixa
+                if not movimento_adicionado and preco < fundo:
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally secundária (Fundo)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_reacao_sec_baixa
+                ):
+                    estado = "reacao_secundaria"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária",
+                        }
+                    )
+                    movimento_adicionado = True
+                    # retorno do rally secundario para reacao
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                    and preco > ultimo_pivot_baixa
+                ):
+                    estado = "rally_natural"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+                    print(f"reacao sec :", {ultimo_pivot_reacao_sec_baixa})
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > ultimo_pivot_baixa
+                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                ):
+
+                    # volta Rally natural
+                    estado = "rally_natural"
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Rally Natural (Baixa)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_reacao_sec_baixa is not None
+                    and preco > fundo + limite
+                    and preco < ultimo_pivot_rally_baixa
+                ):
+                    estado = "reacao_secundaria"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Reação secundária (retomada)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_baixa is not None
+                    and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+    logger.info("\n=== MOVIMENTOS CLASSIFICADOS ===")
+    for p in movimentos:
+        logger.info(
+            f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}"
+        )
+    logger.info("=================================\n")
+
+    return jsonify(movimentos)
 
 
 @app.route("/")

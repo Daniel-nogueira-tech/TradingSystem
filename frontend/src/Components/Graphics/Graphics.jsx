@@ -20,17 +20,17 @@ const Graphics = () => {
 
   const handleClick = (time) => {
     setActiveButton(time);
-    console.log(time);
   };
 
   const movimentos = [
+    "Rally secundária",
     "Rally natural",
     "Tendência Alta",
     "Tendência Baixa",
     "Reação natural",
     "Reação secundária",
   ]
-  console.log(dadosPrice);
+
 
 
   // Mapeamento caso haja pequenas diferenças de nomenclatura:
@@ -38,15 +38,31 @@ const Graphics = () => {
     'Rally Natural (inicial)': 'Rally natural',
     'Rally Natural (fundo)': 'Rally natural',
     'Rally Natural (topo)': 'Rally natural',
+    'Rally Natural (Baixa)':'Reação natural',
+    'Rally Natural (Alta)':'Reação natural',
+
+    'Tendência Alta':'Tendência Alta',
     'Tendência Alta (retomada)': 'Tendência Alta',
     'Tendência Alta (topo)': 'Tendência Alta',
     'Tendência Baixa (reversão)': 'Tendência Baixa',
+    'Tendência Alta (reversão)':'Tendência Alta',
     'Tendência Baixa (fundo)': 'Tendência Baixa',
+
     'Reação Natural (topo)': 'Reação natural',
     "Reação Natural (fundo)": "Reação natural",
-    'Reação secundária':'Reação secundária',
-    'Reação secundária (fundo)':'Reação secundária'
+    'Reação Natural (de baixa)':'Reação natural',
+    'Reação Natural (Alta)':'Reação natural',
 
+    'Reação Natural (Baixa)':'Rally natural',
+    'Reação secundária': 'Reação secundária',
+    'Reação secundária (Fundo)': 'Reação secundária',
+    'Rally secundário (Alta)': 'Reação secundária',
+    'Reação secundária (topo)': 'Reação secundária',
+
+    'Rally secundária (Topo)': 'Rally secundária',
+    'Rally secundária (Fundo)': 'Rally secundária',
+    'Rally secundário (Alta)': 'Rally secundária',
+    'Rally secundário (Baixa)': 'Rally secundária',
   };
 
   // Transforma os dados diretamente em linhas da tabela

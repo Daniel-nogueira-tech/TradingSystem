@@ -1,4 +1,4 @@
-import React, { createContext, useEffect, useState } from 'react';
+import React, { createContext, use, useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 
@@ -13,6 +13,9 @@ const ContextApi = (props) => {
   const [valuesSecondary, setValuesSecondary] = useState([]);
   const [labelsSecondary, setLabelsSecondary] = useState([]);
   const [dadosPriceSecondary, setDadosPriceSecondary] = useState([]);
+  const [dadosPriceKey, setDadosPriceKey] = useState([]);
+  const [labelsKey, setLabelsKey] = useState([]);
+  const [valuesKey, setValueKey] = useState([]);
 
 
   const graphicDataOne = async () => {
@@ -36,7 +39,7 @@ const ContextApi = (props) => {
       const data = response.data;
       const prices = data.map(p => parseFloat(p.closePrice));
       const time = data.map(p => p.closeTime);
-     
+
       setDadosPriceSecondary(data);
       setLabelsSecondary(time);
       setValuesSecondary(prices)
@@ -45,6 +48,22 @@ const ContextApi = (props) => {
 
     }
   }
+
+  const graphicDataKey = async () => {
+    try {
+      const response = await axios.get(url + "/api/filter_price_key");
+      const data = response.data;
+      const prices = data.map(p => parseFloat(p.closePrice));
+      const time = data.map(p => p.closeTime);
+
+      setDadosPriceKey(data);
+      setLabelsKey(time);
+      setValueKey(prices);
+
+    } catch (error) {
+      console.error("Erro na API:", error);
+    }
+  };
 
 
 
@@ -125,6 +144,7 @@ const ContextApi = (props) => {
           [
             graphicDataOne(),
             graphicDataSecondary(),
+            graphicDataKey(),
 
           ]);
 
@@ -146,7 +166,10 @@ const ContextApi = (props) => {
     valuesSecondary,
     labelsSecondary,
     theme,
-    setTheme
+    setTheme,
+    dadosPriceKey,
+    labelsKey,
+    valuesKey,
   };
 
   return (

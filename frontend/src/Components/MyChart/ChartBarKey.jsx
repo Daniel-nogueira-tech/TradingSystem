@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import zoomPlugin from 'chartjs-plugin-zoom';
 import {
     Chart as ChartJS,
     BarElement,
@@ -7,8 +8,10 @@ import {
     Title,
     Tooltip,
     Legend,
+    LogarithmicScale
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import { AppContext } from '../../ContextApi/ContextApi';
 
 ChartJS.register(
     BarElement,
@@ -16,26 +19,29 @@ ChartJS.register(
     LinearScale,
     Title,
     Tooltip,
-    Legend
+    Legend,
+    LogarithmicScale,
+    zoomPlugin
 );
 
 const ChartBarKey = () => {
-    const valores = [20, 25, 30, 25, 24, 22, 25, 30, 34, 38, 30, 45, 50, 52, 58, 80,];
-
+    const { labelsKey, valuesKey, } = useContext(AppContext);
+    console.log(valuesKey);
+    
     // Gerar cores com base na comparação com o valor anterior
-    const backgroundColor = valores.map((valor, index) => {
+    const backgroundColor = valuesKey.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)'; // primeiro valor (neutro)
-        return valor >= valores[index - 1]
+        return valor >= valuesKey[index - 1]
             ? 'rgba(255, 251, 0, 0.59)'   // verde se maior ou igual
             : 'rgba(163, 163, 163, 0.63)'; // vermelho se menor
     });
 
     const data = {
-        labels: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'agos', 'set', 'otu', 'nov', 'dez', 'Jan', 'Fev', 'Mar', 'Abr',],
+        labels: labelsKey,
         datasets: [
             {
                 label: 'Chave',
-                data: valores,
+                data: valuesKey,
                 backgroundColor: backgroundColor,
                 borderRadius: 6,
             },
@@ -95,16 +101,36 @@ const ChartBarKey = () => {
             },
             title: {
                 display: true,
-                text: 'Gráfico ETHUSD',
+                text: 'Gráfico Σ',
             },
             customLabelPlugin,
+            zoom: {
+                pan: {
+                    enabled: true,
+                    mode: 'x', // ou 'xy' se quiser arrastar vertical também
+                },
+                zoom: {
+                    wheel: {
+                        enabled: true, // zoom com scroll do mouse
+                    },
+                    pinch: {
+                        enabled: true // zoom com gesto de pinça em touch
+                    },
+                    mode: 'x', // zoom horizontal
+                }
+
+            },
         },
         scales: {
             y: {
-                beginAtZero: true,
+                beginAtZero: false,
+                type: 'linear',
+                suggestedMin: Math.min(...valuesKey) * 0.98,
+                suggestedMax: Math.max(...valuesKey) * 1.02,
             },
         },
     };
+
     return (
         <div style={{ width: '600px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
             <Bar data={data} options={options} plugins={[customLabelPlugin]} />
