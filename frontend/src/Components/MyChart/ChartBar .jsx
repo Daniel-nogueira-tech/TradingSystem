@@ -15,6 +15,7 @@ import {
 import { Bar } from 'react-chartjs-2';
 import { AppContext } from '../../ContextApi/ContextApi';
 
+
 ChartJS.register(
     BarElement,
     CategoryScale,
@@ -29,7 +30,7 @@ ChartJS.register(
 
 
 const ChartBar = () => {
-    const { values, labels } = useContext(AppContext);
+    const { values, labels, handleSearch, inputRefMain } = useContext(AppContext);
 
 
 
@@ -138,17 +139,15 @@ const ChartBar = () => {
 
     };
 
-    const inputRef = useRef(null);
-    useEffect(() => {
-        inputRef.current.focus();
-    }, []);
+
+
 
 
     return (
         <div style={{ width: '600px', margin: '0 auto' }} >
             <div style={{ display: 'flex' }}>
                 <input
-                    ref={inputRef}
+                     ref={inputRefMain}
                     type="text"
                     style={{
                         width: '140px',
@@ -156,15 +155,23 @@ const ChartBar = () => {
                         border: 'none',
                         padding: '8px'
                     }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            handleSearch();
+                        }
+                    }}
                     placeholder='Pesquisa de Símbolo'
                 />
                 <button
+                    type='submit'
                     className='button-search'
-                    onClick={() => inputRef.current.focus()} >
+                    onClick={handleSearch}
+                >
                     <img src="./search.svg" alt="search" />
+
                 </button>
             </div>
-            <Bar data={data} options={options} plugins={[customLabelPlugin,zoomPlugin]} />
+            <Bar data={data} options={options} plugins={[customLabelPlugin, zoomPlugin]} />
         </div>
 
     );

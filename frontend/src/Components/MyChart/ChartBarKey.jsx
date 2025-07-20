@@ -26,8 +26,7 @@ ChartJS.register(
 
 const ChartBarKey = () => {
     const { labelsKey, valuesKey, } = useContext(AppContext);
-    console.log(valuesKey);
-    
+
     // Gerar cores com base na comparação com o valor anterior
     const backgroundColor = valuesKey.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)'; // primeiro valor (neutro)

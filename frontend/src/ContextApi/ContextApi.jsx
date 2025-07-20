@@ -1,4 +1,4 @@
-import React, { createContext, use, useEffect, useState } from 'react';
+import React, { createContext, use, useEffect, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 
@@ -16,6 +16,9 @@ const ContextApi = (props) => {
   const [dadosPriceKey, setDadosPriceKey] = useState([]);
   const [labelsKey, setLabelsKey] = useState([]);
   const [valuesKey, setValueKey] = useState([]);
+  const inputRefMain = useRef(null);
+  const inputRefSec = useRef(null);
+
 
 
   const graphicDataOne = async () => {
@@ -64,6 +67,66 @@ const ContextApi = (props) => {
       console.error("Erro na API:", error);
     }
   };
+
+
+  const handleSearch = async () => {
+   inputRefMain.current.focus();
+
+    const symbol = inputRefMain.current.value.toUpperCase();
+    if (!symbol) return;
+
+    try {
+      const response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbol}`);
+      const data = response.data;
+
+      // Exemplo: adaptando conforme seu backend retorna
+      // Ajuste as propriedades conforme a resposta JSON
+      const prices = data.map(p => parseFloat(p.closePrice));
+      const time = data.map(p => p.closeTime);
+
+      setLabels(time);
+      setValues(prices);
+      setDadosPrice(data);
+
+      console.log('Dados atualizados:', { time, prices });
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+    }
+    inputRefMain.current.value = "";
+
+  };
+
+
+  const handleSearchSec = async () => {
+   inputRefSec.current.focus();
+
+    const symbol = inputRefSec.current.value.toUpperCase();
+    if (!symbol) return;
+
+    try {
+      const response = await axios.get(`${url}/api/filter_price_atr_secondy?symbol=${symbol}`);
+      const data = response.data;
+
+      // Exemplo: adaptando conforme seu backend retorna
+      // Ajuste as propriedades conforme a resposta JSON
+      const prices = data.map(p => parseFloat(p.closePrice));
+      const time = data.map(p => p.closeTime);
+
+      setDadosPriceSecondary(data);
+      setLabelsSecondary(time);
+      setValuesSecondary(prices)
+
+      console.log('Dados atualizados:', { time, prices });
+    } catch (error) {
+      console.error('Erro ao buscar dados:', error);
+    }
+    inputRefSec.current.value = "";
+
+  };
+
+
+
+
 
 
 
@@ -145,8 +208,16 @@ const ContextApi = (props) => {
             graphicDataOne(),
             graphicDataSecondary(),
             graphicDataKey(),
+            handleSearchSec(),
 
           ]);
+        // Atualiza a cada 60 segundos (60000 ms)
+        const interval = setInterval(() => {
+          graphicDataKey();
+
+        }, 60000);
+        // Limpa o intervalo quando desmontar
+        return () => clearInterval(interval);
 
       } catch (error) {
         console.error("Erro ao carregar os dados iniciais:", error);
@@ -170,6 +241,10 @@ const ContextApi = (props) => {
     dadosPriceKey,
     labelsKey,
     valuesKey,
+    handleSearch,
+    inputRefMain,
+    inputRefSec,
+    handleSearchSec,
   };
 
   return (

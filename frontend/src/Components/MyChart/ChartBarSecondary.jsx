@@ -25,7 +25,7 @@ ChartJS.register(
 );
 
 const ChartBarSecondary = () => {
-    const { valuesSecondary, labelsSecondary } = useContext(AppContext)
+    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec } = useContext(AppContext)
 
     // Gerar cores com base na comparação com o valor anterior
     const backgroundColor = valuesSecondary.map((valor, index) => {
@@ -103,7 +103,7 @@ const ChartBarSecondary = () => {
                 text: 'Gráfico ETHUSD',
             },
             customLabelPlugin,
-             zoom: {
+            zoom: {
                 pan: {
                     enabled: true,
                     mode: 'x', // ou 'xy' se quiser arrastar vertical também
@@ -130,16 +130,12 @@ const ChartBarSecondary = () => {
         },
     };
 
-    const inputRef = useRef(null);
-    useEffect(() => {
-        inputRef.current.focus();
-    }, []);
 
     return (
         <div style={{ width: '600px', margin: '0 auto' }}>
             <form style={{ display: 'flex' }}>
                 <input
-                    ref={inputRef}
+                    ref={inputRefSec}
                     type="text"
                     style={{
                         width: '140px',
@@ -147,11 +143,16 @@ const ChartBarSecondary = () => {
                         border: 'none',
                         padding: '8px'
                     }}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                            handleSearchSec();
+                        }
+                    }}
                     placeholder='Pesquisa de Símbolo'
                 />
                 <button
                     className='button-search'
-                    onClick={() => inputRef.current.focus(null)} >
+                    onClick={handleSearchSec} >
                     <img src="./search.svg" alt="search" />
                 </button>
             </form>

@@ -8,8 +8,10 @@ import { AppContext } from '../../ContextApi/ContextApi';
 const Graphics = () => {
   const [activeButton, setActiveButton] = useState('15m');
   const [value, setValue] = useState(500);
-  const { dadosPrice } = useContext(AppContext);
-  const dadosTables = dadosPrice.reverse()
+  const { dadosPrice,dadosPriceSecondary,dadosPriceKey } = useContext(AppContext);
+  const dadosTables = dadosPrice.reverse();
+  const dadosTablesSec =  dadosPriceSecondary.reverse();
+  const dadosTablesKey = dadosPriceKey.reverse();
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPage_2, setCurrentPage_2] = useState(1);
   const [currentPageKey, setCurrentPageKey] = useState(1);
@@ -92,7 +94,7 @@ const Graphics = () => {
 
   // Transforma os dados diretamente em linhas da tabela secundaria
   const linhas_2 = useMemo(() => {
-    return dadosTables.map(item => {
+    return dadosTablesSec.map(item => {
       const dataHora = new Date(item.closeTime).toLocaleString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -112,11 +114,11 @@ const Graphics = () => {
 
       return linha_2;
     });
-  }, [dadosPrice]);
+  }, [dadosPriceSecondary]);
 
   // Transforma os dados diretamente em linhas da tabela Chave
   const linhasKey = useMemo(() => {
-    return dadosTables.map(item => {
+    return dadosTablesKey.map(item => {
       const dataHora = new Date(item.closeTime).toLocaleString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -136,7 +138,7 @@ const Graphics = () => {
 
       return linhaKey;
     });
-  }, [dadosPrice]);
+  }, [dadosPriceKey]);
 
 
   // Paginação
