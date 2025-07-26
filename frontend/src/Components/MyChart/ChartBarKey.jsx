@@ -25,7 +25,7 @@ ChartJS.register(
 );
 
 const ChartBarKey = () => {
-    const { labelsKey, valuesKey, } = useContext(AppContext);
+    const { labelsKey, valuesKey,symbol,symbolSec } = useContext(AppContext);
 
     // Gerar cores com base na comparação com o valor anterior
     const backgroundColor = valuesKey.map((valor, index) => {
@@ -100,7 +100,7 @@ const ChartBarKey = () => {
             },
             title: {
                 display: true,
-                text: 'Gráfico Σ',
+                text: `Σ - ${symbol} + ${symbolSec}`,
             },
             customLabelPlugin,
             zoom: {

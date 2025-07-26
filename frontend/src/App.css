@@ -41,3 +41,23 @@
 .read-the-docs {
   color: #888;
 }
+
+/*css para o toast*/
+.custom-toast .p-toast-message {
+  font-size: 1.1rem;          
+  padding: 1rem;            
+  min-width: 300px;           
+  border-radius: 10px;    
+}
+
+.custom-toast .p-toast-message-content {
+  padding: 0.4rem;
+}
+
+.custom-toast .p-toast-summary {
+  font-weight: bold;
+}
+
+.custom-toast .p-toast-detail {
+  margin-top: 0.5rem;
+}

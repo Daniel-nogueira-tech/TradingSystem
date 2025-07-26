@@ -6,11 +6,10 @@ import ChartBarKey from '../MyChart/ChartBarKey'
 import { AppContext } from '../../ContextApi/ContextApi';
 
 const Graphics = () => {
-  const [activeButton, setActiveButton] = useState('15m');
   const [value, setValue] = useState(500);
-  const { dadosPrice,dadosPriceSecondary,dadosPriceKey } = useContext(AppContext);
+  const { dadosPrice, dadosPriceSecondary, dadosPriceKey, activeButton, handleClickTime, } = useContext(AppContext);
   const dadosTables = dadosPrice.reverse();
-  const dadosTablesSec =  dadosPriceSecondary.reverse();
+  const dadosTablesSec = dadosPriceSecondary.reverse();
   const dadosTablesKey = dadosPriceKey.reverse();
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPage_2, setCurrentPage_2] = useState(1);
@@ -20,9 +19,7 @@ const Graphics = () => {
   const itemsPerPageKey = 20;
 
 
-  const handleClick = (time) => {
-    setActiveButton(time);
-  };
+
 
   const movimentos = [
     "Rally secundária",
@@ -40,26 +37,30 @@ const Graphics = () => {
     'Rally Natural (inicial)': 'Rally natural',
     'Rally Natural (fundo)': 'Rally natural',
     'Rally Natural (topo)': 'Rally natural',
-    'Rally Natural (Baixa)':'Reação natural',
-    'Rally Natural (Alta)':'Reação natural',
+    'Rally Natural (Baixa)': 'Rally natural',
+    'Rally Natural (Alta)': 'Rally natural',
+    'Rally Natural (retorno)':'Rally natural',
 
-    'Tendência Alta':'Tendência Alta',
+    'Tendência Alta': 'Tendência Alta',
     'Tendência Alta (retomada)': 'Tendência Alta',
     'Tendência Alta (topo)': 'Tendência Alta',
+    'Tendência Alta (reversão)': 'Tendência Alta',
+
     'Tendência Baixa (reversão)': 'Tendência Baixa',
-    'Tendência Alta (reversão)':'Tendência Alta',
     'Tendência Baixa (fundo)': 'Tendência Baixa',
+    'Tendência Baixa (retomada)': 'Tendência Baixa',
+    'Tendência Baixa': 'Tendência Baixa',
 
     'Reação Natural (topo)': 'Reação natural',
     "Reação Natural (fundo)": "Reação natural",
-    'Reação Natural (de baixa)':'Reação natural',
-    'Reação Natural (Alta)':'Reação natural',
+    'Reação Natural (de baixa)': 'Reação natural',
+    'Reação Natural (Alta)': 'Reação natural',
 
-    'Reação Natural (Baixa)':'Rally natural',
+    'Reação Natural (Baixa)': 'Reação natural',
     'Reação secundária': 'Reação secundária',
     'Reação secundária (Fundo)': 'Reação secundária',
-    'Rally secundário (Alta)': 'Reação secundária',
     'Reação secundária (topo)': 'Reação secundária',
+    'Reação secundária (retomada)': 'Reação secundária',
 
     'Rally secundária (Topo)': 'Rally secundária',
     'Rally secundária (Fundo)': 'Rally secundária',
@@ -174,21 +175,22 @@ const Graphics = () => {
             className={`button-time ${activeButton === '15m'
               ? 'active'
               : ''}`}
-            onClick={() => handleClick('15m')}
+              
+            onClick={() => handleClickTime('15m')}
           >15m</button>
           <button
 
             className={`button-time ${activeButton === '1h'
               ? 'active'
               : ''}`}
-            onClick={() => handleClick('1h')}
+            onClick={() => handleClickTime('1h')}
           >1h</button>
 
           <button
-            className={`button-time ${activeButton === '1D'
+            className={`button-time ${activeButton === '1d'
               ? 'active'
               : ''}`}
-            onClick={() => handleClick('1D')}
+            onClick={() => handleClickTime('1d')}
           >1D</button>
         </div>
 
@@ -284,7 +286,7 @@ const Graphics = () => {
                   {linha.valores.map((valor, j) => (
                     <td key={j}>
                       {valor != null
-                        ? Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        ? Number(valor).toLocaleString('pt-EN', { style: 'currency', currency: 'USD' })
                         : ''}
                     </td>
                   ))}
@@ -334,7 +336,7 @@ const Graphics = () => {
                   {linha_2.valores.map((valor, j) => (
                     <td key={j}>
                       {valor != null
-                        ? Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                        ? Number(valor).toLocaleString('pt-EN', { style: 'currency', currency: 'USD' })
                         : ''}
                     </td>
                   ))}
@@ -386,7 +388,7 @@ const Graphics = () => {
                 {linhaKey.valores.map((valor, j) => (
                   <td key={j}>
                     {valor != null
-                      ? Number(valor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                      ? Number(valor).toLocaleString('pt-EN', { style: 'currency', currency: 'USD' })
                       : ''}
                   </td>
                 ))}

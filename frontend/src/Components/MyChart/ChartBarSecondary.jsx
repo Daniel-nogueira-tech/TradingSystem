@@ -25,7 +25,7 @@ ChartJS.register(
 );
 
 const ChartBarSecondary = () => {
-    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec } = useContext(AppContext)
+    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec,symbolSec } = useContext(AppContext)
 
     // Gerar cores com base na comparação com o valor anterior
     const backgroundColor = valuesSecondary.map((valor, index) => {
@@ -100,7 +100,7 @@ const ChartBarSecondary = () => {
             },
             title: {
                 display: true,
-                text: 'Gráfico ETHUSD',
+                text: symbolSec,
             },
             customLabelPlugin,
             zoom: {
@@ -133,7 +133,7 @@ const ChartBarSecondary = () => {
 
     return (
         <div style={{ width: '600px', margin: '0 auto' }}>
-            <form style={{ display: 'flex' }}>
+            <div style={{ display: 'flex' }}>
                 <input
                     ref={inputRefSec}
                     type="text"
@@ -152,10 +152,10 @@ const ChartBarSecondary = () => {
                 />
                 <button
                     className='button-search'
-                    onClick={handleSearchSec} >
+                    onClick={handleSearchSec}>
                     <img src="./search.svg" alt="search" />
                 </button>
-            </form>
+            </div>
             <Bar data={data} options={options} plugins={[customLabelPlugin]} />
         </div>
     );

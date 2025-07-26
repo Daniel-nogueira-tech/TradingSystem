@@ -30,11 +30,11 @@ ChartJS.register(
 
 
 const ChartBar = () => {
-    const { values, labels, handleSearch, inputRefMain } = useContext(AppContext);
+    const { values, labels, handleSearch, inputRefMain,symbol} = useContext(AppContext);
+    
 
 
-
-
+  
     // Gerar cores com base na comparação com o valor anterior
     const backgroundColor = values.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)'; // primeiro valor (neutro)
@@ -108,7 +108,7 @@ const ChartBar = () => {
             },
             title: {
                 display: true,
-                text: 'Gráfico BTC',
+                text: symbol,
             },
             customLabelPlugin,
             zoom: {
@@ -166,6 +166,7 @@ const ChartBar = () => {
                     type='submit'
                     className='button-search'
                     onClick={handleSearch}
+                    
                 >
                     <img src="./search.svg" alt="search" />
 
