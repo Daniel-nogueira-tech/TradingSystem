@@ -41,7 +41,31 @@
     transform: scale(1.08);
 }
 
+/*////////////////////////*/
+.price {
+  padding: 8px;
+  border: 1px solid transparent;
+  margin-bottom: 6px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: 0.3s;
+}
 
+.price.activePivo {
+  background-color: var(--background-table, #f0f0f0);
+  color: var(--navbar-color-active, #7e50aa);
+  border-color: #7e50aa;
+  font-weight: bold;
+}
+
+/*zoom*/
+
+.btn-zoom{
+    margin-left: 15px;
+    padding: 5px;
+    border-radius: 8px;
+    border: none;
+}
 
 @media (max-width: 1900px) {
     .MyChart-analysis{

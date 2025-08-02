@@ -130,7 +130,7 @@ const Home = () => {
                         </div>
                         <div className='container-results'>
                             <h3>Perdas</h3>
-                            <p>R$ -20.654,00</p>
+                            <p>R$ -2.654,00</p>
                         </div>
                         <div className='container-results'>
                             <h3>Retorno</h3>
@@ -155,7 +155,7 @@ const Home = () => {
                         <div className='container-results'>
                             <h3>Maior lucro / maior perda</h3>
                             <p>Lucro: R$ 3.200,00</p>
-                            <p>Perda: R$ -1.100,00</p>
+                            <p>Perda: R$ -2.654,00</p>
                         </div>
                         <div className='container-results'>
                             <h3>Risco/Retorno</h3>

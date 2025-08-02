@@ -1,6 +1,6 @@
-import React, { useRef, useEffect, useContext } from 'react';
+import React, { useRef, useContext } from 'react';
 import zoomPlugin from 'chartjs-plugin-zoom';
-import './MyChart.css'
+import './MyChart.css';
 import {
     Chart as ChartJS,
     BarElement,
@@ -10,14 +10,12 @@ import {
     Tooltip,
     Legend,
     LogarithmicScale,
-
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2'; // 👈 gráfico de barra agora
 import { AppContext } from '../../ContextApi/ContextApi';
 
-
 ChartJS.register(
-    BarElement,
+    BarElement, // 👈 necessário para barras
     CategoryScale,
     LinearScale,
     Title,
@@ -27,20 +25,31 @@ ChartJS.register(
     zoomPlugin,
 );
 
-
-
 const ChartBar = () => {
-    const { values, labels, handleSearch, inputRefMain,symbol} = useContext(AppContext);
-    
+    const { values, labels, handleSearch, inputRefMain, symbol, importantPoints, selectedPivots } = useContext(AppContext);
+    const chartRef = useRef();
 
+    const handleZoomIn = () => {
+        if (chartRef.current) chartRef.current.zoom(1.2);
+    };
 
-  
-    // Gerar cores com base na comparação com o valor anterior
+    const handleZoomOut = () => {
+        if (chartRef.current) chartRef.current.zoom(0.8);
+    };
+
+    const handleResetZoom = () => {
+        if (chartRef.current) chartRef.current.resetZoom();
+    };
+
+    if (!importantPoints || !importantPoints["Tendência"]) {
+        return <div>Carregando gráfico...</div>;
+    }
+
     const backgroundColor = values.map((valor, index) => {
-        if (index === 0) return 'rgba(113, 113, 113, 0.6)'; // primeiro valor (neutro)
+        if (index === 0) return 'rgba(113, 113, 113, 0.6)';
         return valor >= values[index - 1]
-            ? 'rgba(0, 200, 0, 0.4)'   // verde se maior ou igual
-            : 'rgba(200, 0, 0, 0.4)'; // vermelho se menor
+            ? 'rgba(0, 200, 0, 0.4)'
+            : 'rgba(200, 0, 0, 0.4)';
     });
 
     const data = {
@@ -55,45 +64,33 @@ const ChartBar = () => {
         ],
     };
 
-    // Plugin que desenha texto em cima das barras
     const customLabelPlugin = {
         id: 'customLabelPlugin',
         afterDatasetsDraw(chart) {
             const { ctx, chartArea, scales } = chart;
             const dataset = chart.data.datasets[0];
             const meta = chart.getDatasetMeta(0);
-
-            // Seus níveis de referência
-            const niveis = [
-                { valor: 110255.63, texto: 'Pivot', cor: 'orange' },
-                { valor: 107950, texto: 'Pivot', cor: 'orange' },
-                { valor: 108400, texto: 'Pivot', cor: 'orange' },
-            ];
+            const niveis = selectedPivots;
 
             niveis.forEach(nivel => {
-                // Procura a primeira barra que tem exatamente o valor
                 const index = dataset.data.findIndex(v => Math.abs(v - nivel.valor) < 0.01);
-
-
                 if (index !== -1) {
                     const bar = meta.data[index];
                     const y = scales.y.getPixelForValue(nivel.valor);
 
                     ctx.save();
                     ctx.beginPath();
-                    ctx.moveTo(bar.x, y); // começa na barra que atingiu o valor
-                    ctx.lineTo(chartArea.right, y); // vai até o fim do gráfico
+                    ctx.moveTo(bar.x, y);
+                    ctx.lineTo(chartArea.right, y);
                     ctx.strokeStyle = nivel.cor;
                     ctx.setLineDash([4, 4]);
                     ctx.lineWidth = 1.2;
                     ctx.stroke();
 
-                    // Escreve o nome ao lado da barra
                     ctx.fillStyle = nivel.cor;
                     ctx.font = '12px sans-serif';
                     ctx.textAlign = 'left';
                     ctx.fillText(`${nivel.texto}: ${nivel.valor}`, bar.x + 5, y - 6);
-
                     ctx.restore();
                 }
             });
@@ -110,22 +107,33 @@ const ChartBar = () => {
                 display: true,
                 text: symbol,
             },
-            customLabelPlugin,
             zoom: {
                 pan: {
                     enabled: true,
-                    mode: 'x', // ou 'xy' se quiser arrastar vertical também
+                    mode: 'xy',
+                    modifierKey: 'ctrl',
                 },
                 zoom: {
                     wheel: {
-                        enabled: true, // zoom com scroll do mouse
+                        enabled: true,
+                        modifierKey: 'shift',
+                        speed: 0.1,
+                    },
+                    drag: {
+                        enabled: true,
+                        borderColor: 'rgba(225,225,225,0.3)',
+                        borderWidth: 1,
+                        backgroundColor: 'rgba(225,225,225,0.1)',
                     },
                     pinch: {
-                        enabled: true // zoom com gesto de pinça em touch
+                        enabled: true,
                     },
-                    mode: 'x', // zoom horizontal
-                }
-
+                    mode: 'xy',
+                },
+                limits: {
+                    x: { min: 'original', max: 'original' },
+                    y: { min: 'original', max: 'original' },
+                },
             },
         },
         scales: {
@@ -136,18 +144,13 @@ const ChartBar = () => {
                 suggestedMax: Math.max(...values) * 1.02,
             },
         },
-
     };
 
-
-
-
-
     return (
-        <div style={{ width: '600px', margin: '0 auto' }} >
+        <div style={{ width: '600px', margin: '0 auto' }}>
             <div style={{ display: 'flex' }}>
                 <input
-                     ref={inputRefMain}
+                    ref={inputRefMain}
                     type="text"
                     style={{
                         width: '140px',
@@ -156,9 +159,7 @@ const ChartBar = () => {
                         padding: '8px'
                     }}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            handleSearch();
-                        }
+                        if (e.key === 'Enter') handleSearch();
                     }}
                     placeholder='Pesquisa de Símbolo'
                 />
@@ -166,19 +167,25 @@ const ChartBar = () => {
                     type='submit'
                     className='button-search'
                     onClick={handleSearch}
-                    
                 >
                     <img src="./search.svg" alt="search" />
-
                 </button>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
+                    <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>
+                    <button className='btn-zoom' onClick={handleZoomOut}>Zoom -</button>
+                    <button className='btn-zoom' onClick={handleResetZoom}>Reset</button>
+                </div>
             </div>
-            <Bar data={data} options={options} plugins={[customLabelPlugin, zoomPlugin]} />
-        </div>
 
+            <Bar
+                key={JSON.stringify(selectedPivots)}
+                ref={chartRef}
+                data={data}
+                options={options}
+                plugins={[customLabelPlugin, zoomPlugin]}
+            />
+        </div>
     );
 };
 
 export default ChartBar;
-
-
-

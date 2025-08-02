@@ -21,7 +21,7 @@
   width: 49%;
   height: 400px;
   background: var(--background);
-  text-align:center ;
+  text-align: center;
 
 }
 
@@ -30,7 +30,8 @@
   gap: 10px;
   height: 400px;
 }
-.graphics h3{
+
+.graphics h3 {
   margin-bottom: 16px;
 }
 
@@ -39,7 +40,7 @@
   text-align: center;
   width: 280px;
   margin-bottom: 10px;
-  background-color: var(--background-card);
+  background-color: var(--navbar-color);
   padding: 5px;
   border-radius: 10px;
   transition: 0.8s ease;
@@ -53,8 +54,8 @@
 .price p {
   margin-top: 5px;
   margin-bottom: 5px;
-  font-size: 14px;
-  text-shadow: var(--black) 1px 2px 6px;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 /*Tabelas*/
@@ -90,9 +91,11 @@ th {
   background: var(--background);
   animation: fadeIns 1s ease;
 }
-.table{
+
+.table {
   width: 100%;
 }
+
 .table-container-key {
   display: flex;
   width: 100%;
@@ -193,6 +196,51 @@ th {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/*ativa botoes*/
+.button-infor {
+  margin-bottom: 14px;
+}
+
+.button-infor button {
+  width: 45%;
+  padding: 6px 12px;
+  margin: 4px;
+  background-color: var(--navbar-color-active);
+  border: 1px solid var(--white);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.button-infor button:hover {
+  background-color: var(--background-card);
+}
+
+.button-infor .activeButton {
+  background-color: var(--background-table);
+  color: var(--navbar-color-active);
+  border-color: #7e50aa;
+  font-weight: bold;
+}
+
+.button-infor .activeButtonPivot {
+  background-color: var(--background-table);
+  color: var(--navbar-color-active);
+  border-color: #7e50aa;
+  font-weight: bold;
+}
+
+/* ativa os pivot */
+.price.activePivo {
+  background-color: #a40f0f;
+  color: var(--navbar-color-active);
+  border-color: #7e50aa;
+  font-weight: bold;
+}
+
+
+
 
 
 @media (max-width:1900px) {

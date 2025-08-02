@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useContext } from 'react';
+import React, { useRef, useContext } from 'react';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import {
     Chart as ChartJS,
@@ -8,9 +8,9 @@ import {
     Title,
     Tooltip,
     Legend,
-    LogarithmicScale
+    LogarithmicScale,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { Bar } from 'react-chartjs-2'; // 👈 agora usamos Bar aqui
 import { AppContext } from '../../ContextApi/ContextApi';
 
 ChartJS.register(
@@ -21,18 +21,30 @@ ChartJS.register(
     Tooltip,
     Legend,
     LogarithmicScale,
-    zoomPlugin
+    zoomPlugin,
 );
 
 const ChartBarSecondary = () => {
-    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec,symbolSec } = useContext(AppContext)
+    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec, symbolSec } = useContext(AppContext)
+    const chartRef = useRef();
 
-    // Gerar cores com base na comparação com o valor anterior
+    const handleZoomIn = () => {
+        if (chartRef.current) chartRef.current.zoom(1.2);
+    };
+
+    const handleZoomOut = () => {
+        if (chartRef.current) chartRef.current.zoom(0.8);
+    };
+
+    const handleResetZoom = () => {
+        if (chartRef.current) chartRef.current.resetZoom();
+    };
+
     const backgroundColor = valuesSecondary.map((valor, index) => {
-        if (index === 0) return 'rgba(113, 113, 113, 0.6)'; // primeiro valor (neutro)
+        if (index === 0) return 'rgba(113, 113, 113, 0.6)';
         return valor >= valuesSecondary[index - 1]
-            ? 'rgba(0, 200, 0, 0.4)'   // verde se maior ou igual
-            : 'rgba(200, 0, 0, 0.4)'; // vermelho se menor
+            ? 'rgba(0, 200, 0, 0.4)'
+            : 'rgba(200, 0, 0, 0.4)';
     });
 
     const data = {
@@ -47,7 +59,6 @@ const ChartBarSecondary = () => {
         ],
     };
 
-    // Plugin que desenha texto em cima das barras
     const customLabelPlugin = {
         id: 'customLabelPlugin',
         afterDatasetsDraw(chart) {
@@ -55,7 +66,6 @@ const ChartBarSecondary = () => {
             const dataset = chart.data.datasets[0];
             const meta = chart.getDatasetMeta(0);
 
-            // Seus níveis de referência
             const niveis = [
                 { valor: 22, texto: 'Pivot', cor: 'orange' },
                 { valor: 30, texto: 'Pivot', cor: 'orange' },
@@ -63,8 +73,7 @@ const ChartBarSecondary = () => {
             ];
 
             niveis.forEach(nivel => {
-                // Procura a primeira barra que tem exatamente o valor
-                const index = dataset.data.findIndex(v => v === nivel.valor);
+                const index = dataset.data.findIndex(v => Math.abs(v - nivel.valor) < 0.01);
 
                 if (index !== -1) {
                     const bar = meta.data[index];
@@ -72,25 +81,22 @@ const ChartBarSecondary = () => {
 
                     ctx.save();
                     ctx.beginPath();
-                    ctx.moveTo(bar.x, y); // começa na barra que atingiu o valor
-                    ctx.lineTo(chartArea.right, y); // vai até o fim do gráfico
+                    ctx.moveTo(bar.x, y);
+                    ctx.lineTo(chartArea.right, y);
                     ctx.strokeStyle = nivel.cor;
                     ctx.setLineDash([4, 4]);
                     ctx.lineWidth = 1.2;
                     ctx.stroke();
 
-                    // Escreve o nome ao lado da barra
                     ctx.fillStyle = nivel.cor;
                     ctx.font = '12px sans-serif';
                     ctx.textAlign = 'left';
                     ctx.fillText(`${nivel.texto}: ${nivel.valor}`, bar.x + 5, y - 6);
-
                     ctx.restore();
                 }
             });
         },
     };
-
 
     const options = {
         responsive: true,
@@ -102,22 +108,33 @@ const ChartBarSecondary = () => {
                 display: true,
                 text: symbolSec,
             },
-            customLabelPlugin,
             zoom: {
                 pan: {
                     enabled: true,
-                    mode: 'x', // ou 'xy' se quiser arrastar vertical também
+                    mode: 'xy',
+                    modifierKey: 'ctrl',
                 },
                 zoom: {
                     wheel: {
-                        enabled: true, // zoom com scroll do mouse
+                        enabled: true,
+                        modifierKey: 'shift',
+                        speed: 0.1
+                    },
+                    drag: {
+                        enabled: true,
+                        borderColor: 'rgba(225,225,225,0.3)',
+                        borderWidth: 1,
+                        backgroundColor: 'rgba(225,225,225,0.1)',
                     },
                     pinch: {
-                        enabled: true // zoom com gesto de pinça em touch
+                        enabled: true,
                     },
-                    mode: 'x', // zoom horizontal
-                }
-
+                    mode: 'xy',
+                },
+                limits: {
+                    x: { min: 'original', max: 'original' },
+                    y: { min: 'original', max: 'original' },
+                },
             },
         },
         scales: {
@@ -129,7 +146,6 @@ const ChartBarSecondary = () => {
             },
         },
     };
-
 
     return (
         <div style={{ width: '600px', margin: '0 auto' }}>
@@ -144,9 +160,7 @@ const ChartBarSecondary = () => {
                         padding: '8px'
                     }}
                     onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                            handleSearchSec();
-                        }
+                        if (e.key === 'Enter') handleSearchSec();
                     }}
                     placeholder='Pesquisa de Símbolo'
                 />
@@ -155,8 +169,19 @@ const ChartBarSecondary = () => {
                     onClick={handleSearchSec}>
                     <img src="./search.svg" alt="search" />
                 </button>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
+                    <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>
+                    <button className='btn-zoom' onClick={handleZoomOut}>Zoom -</button>
+                    <button className='btn-zoom' onClick={handleResetZoom}>Reset</button>
+                </div>
             </div>
-            <Bar data={data} options={options} plugins={[customLabelPlugin]} />
+
+            <Bar
+                ref={chartRef}
+                data={data}
+                options={options}
+                plugins={[customLabelPlugin, zoomPlugin]}
+            />
         </div>
     );
 };

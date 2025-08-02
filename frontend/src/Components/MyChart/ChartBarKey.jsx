@@ -25,13 +25,17 @@ ChartJS.register(
 );
 
 const ChartBarKey = () => {
-    const { labelsKey, valuesKey,symbol,symbolSec } = useContext(AppContext);
+    const { labelsKey, valuesKey, symbol, symbolSec, importantPointsKey, selectedPivotsKey } = useContext(AppContext);
+
+    if (!importantPointsKey || !importantPointsKey["Tendência"]) {
+        return <div>Carregando gráfico...</div>;
+    }
 
     // Gerar cores com base na comparação com o valor anterior
     const backgroundColor = valuesKey.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)'; // primeiro valor (neutro)
         return valor >= valuesKey[index - 1]
-            ? 'rgba(255, 251, 0, 0.59)'   // verde se maior ou igual
+            ? 'rgba(168, 186, 10, 0.84)'   // verde se maior ou igual
             : 'rgba(163, 163, 163, 0.63)'; // vermelho se menor
     });
 
@@ -48,7 +52,7 @@ const ChartBarKey = () => {
     };
 
     // Plugin que desenha texto em cima das barras
-    const customLabelPlugin = {
+  const customLabelPlugin = {
         id: 'customLabelPlugin',
         afterDatasetsDraw(chart) {
             const { ctx, chartArea, scales } = chart;
@@ -56,15 +60,13 @@ const ChartBarKey = () => {
             const meta = chart.getDatasetMeta(0);
 
             // Seus níveis de referência
-            const niveis = [
-                { valor: 22, texto: 'Pivot', cor: 'white' },
-                { valor: 30, texto: 'Pivot', cor: 'white' },
-                { valor: 38, texto: 'Pivot', cor: 'white' },
-            ];
+            const niveis = selectedPivotsKey;
+
 
             niveis.forEach(nivel => {
                 // Procura a primeira barra que tem exatamente o valor
-                const index = dataset.data.findIndex(v => v === nivel.valor);
+                const index = dataset.data.findIndex(v => Math.abs(v - nivel.valor) < 0.01);
+
 
                 if (index !== -1) {
                     const bar = meta.data[index];
@@ -84,7 +86,6 @@ const ChartBarKey = () => {
                     ctx.font = '12px sans-serif';
                     ctx.textAlign = 'left';
                     ctx.fillText(`${nivel.texto}: ${nivel.valor}`, bar.x + 5, y - 6);
-
                     ctx.restore();
                 }
             });
@@ -132,7 +133,7 @@ const ChartBarKey = () => {
 
     return (
         <div style={{ width: '600px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <Bar data={data} options={options} plugins={[customLabelPlugin]} />
+            <Bar key={JSON.stringify(selectedPivotsKey)} data={data} options={options} plugins={[customLabelPlugin]} />
         </div>
 
     );

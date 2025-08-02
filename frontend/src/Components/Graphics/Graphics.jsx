@@ -1,19 +1,20 @@
 import React, { useContext, useMemo, useState } from 'react'
 import './Graphics.css'
-import ChartBar from '../MyChart/ChartBar '
-import ChartBarSecondary from '../MyChart/ChartBarSecondary'
+import Chart from '../MyChart/Chart '
+import ChartSecondary from '../MyChart/ChartSecondary'
 import ChartBarKey from '../MyChart/ChartBarKey'
 import { AppContext } from '../../ContextApi/ContextApi';
 
 const Graphics = () => {
   const [value, setValue] = useState(500);
-  const { dadosPrice, dadosPriceSecondary, dadosPriceKey, activeButton, handleClickTime, } = useContext(AppContext);
+  const { dadosPrice, dadosPriceSecondary, dadosPriceKey, activeButton, handleClickTime, importantPoints, importantPointsKey, togglePivot, togglePivotKey, selectedPivotsKeys } = useContext(AppContext);
   const dadosTables = dadosPrice.reverse();
   const dadosTablesSec = dadosPriceSecondary.reverse();
   const dadosTablesKey = dadosPriceKey.reverse();
   const [currentPage, setCurrentPage] = useState(1);
   const [currentPage_2, setCurrentPage_2] = useState(1);
   const [currentPageKey, setCurrentPageKey] = useState(1);
+  const [views, setViews] = useState('primario');
   const itemsPerPage = 20;
   const itemsPerPage_2 = 20;
   const itemsPerPageKey = 20;
@@ -39,7 +40,7 @@ const Graphics = () => {
     'Rally Natural (topo)': 'Rally natural',
     'Rally Natural (Baixa)': 'Rally natural',
     'Rally Natural (Alta)': 'Rally natural',
-    'Rally Natural (retorno)':'Rally natural',
+    'Rally Natural (retorno)': 'Rally natural',
 
     'Tendência Alta': 'Tendência Alta',
     'Tendência Alta (retomada)': 'Tendência Alta',
@@ -164,20 +165,11 @@ const Graphics = () => {
   }, [linhasKey, currentPageKey])
 
 
-
-
   return (
     <div className='graphics-main' >
       <div className='time-frame'>
 
         <div className='time-container'>
-          <button
-            className={`button-time ${activeButton === '15m'
-              ? 'active'
-              : ''}`}
-              
-            onClick={() => handleClickTime('15m')}
-          >15m</button>
           <button
 
             className={`button-time ${activeButton === '1h'
@@ -185,6 +177,13 @@ const Graphics = () => {
               : ''}`}
             onClick={() => handleClickTime('1h')}
           >1h</button>
+          <button
+            className={`button-time ${activeButton === '4h'
+              ? 'active'
+              : ''}`}
+
+            onClick={() => handleClickTime('4h')}
+          >4h</button>
 
           <button
             className={`button-time ${activeButton === '1d'
@@ -209,10 +208,10 @@ const Graphics = () => {
       </div>
 
       <div className='graphics'>
-        <ChartBar />
+        <Chart />
       </div>
       <div className='graphics'>
-        <ChartBarSecondary />
+        <ChartSecondary />
       </div>
       <div className='graphics' id='graphics'>
         <ChartBarKey />
@@ -244,24 +243,57 @@ const Graphics = () => {
 
         <div>
           <h3>Pontos importantes</h3>
-          <div className='price'>
-            <p>Pivô alta:330.524</p>
+          <div>
+            <div className='button-infor'>
+
+              <button onClick={() => setViews('primario')}
+                className={views === 'primario' ? 'activeButton' : ''
+                }
+              >Primario
+              </button>
+
+              <button onClick={() => setViews('chave')}
+                className={views === 'chave' ? 'activeButton' : ''}
+              >Chave</button>
+
+            </div>
+            {/* tabela de dados do primeiro ativo */}
+            {views === 'primario' && (
+              <div>
+                <div className='price' onClick={() => togglePivot('Pivô' || 'activePivo', importantPoints?.["Tendência"]?.price)}>
+                  <p>Tendência: {importantPoints?.["Tendência"]?.price.toFixed(2) ?? '---'}</p>
+                </div>
+                <div className='price' onClick={() => togglePivot('Pivô', importantPoints?.["Rally Natural"]?.price.toFixed(2))}>
+                  <p> Rally Natural: {importantPoints?.["Rally Natural"]?.price.toFixed(2) ?? '---'}</p>
+                </div>
+                <div className='price' onClick={() => togglePivot('Pivô', importantPoints?.["Reação secundária"]?.price.toFixed(2))}>
+                  <p>Rally secundária: {importantPoints?.["Reação secundária"]?.price.toFixed(2) ?? '---'}</p>
+                </div>
+                <div className='price' onClick={() => togglePivot('Pivô', importantPoints?.["Rally secundária"]?.price.toFixed(2))}>
+                  <p>Reação secundária: {importantPoints?.["Rally secundária"]?.price.toFixed(2) ?? '---'}</p>
+                </div>
+              </div>
+            )}
+
           </div>
-          <div className='price'>
-            <p>Pivô baixa: 330.524</p>
-          </div>
-          <div className='price'>
-            <p>Pivô reação natural: 330.524</p>
-          </div>
-          <div className='price'>
-            <p>Pivô rally natural: 330.524</p>
-          </div>
-          <div className='price'>
-            <p>Pivô rally secundária: 330.524</p>
-          </div>
-          <div className='price'>
-            <p>Pivô reação secundária: 330.524</p>
-          </div>
+
+          {views === 'chave' && (
+            <div>
+              <div className='price' onClick={() => togglePivotKey('Pivô' || 'activePivo', importantPointsKey?.["Tendência"]?.price)}>
+                <p>Tendência: {importantPointsKey?.["Tendência"]?.price.toFixed(2) ?? '---'}</p>
+              </div>
+              <div className='price' onClick={() => togglePivotKey('Pivô', importantPointsKey?.["Rally Natural"]?.price)}>
+                <p>Rally Natural: {importantPointsKey?.["Rally Natural"]?.price.toFixed(2) ?? '---'}</p>
+              </div>
+              <div className='price' onClick={() => togglePivotKey('Pivô', importantPointsKey?.["Reação secundária"]?.price)}>
+                <p>Rally secundária: {importantPointsKey?.["Reação secundária"]?.price ?? '---'}</p>
+              </div>
+              <div className='price' onClick={() => togglePivotKey('Pivô', importantPointsKey?.["Rally secundária"]?.price)}>
+                <p>Reação secundária: {importantPointsKey?.["Rally secundária"]?.price ?? '---'}</p>
+              </div>
+              
+            </div>
+          )}
         </div>
       </div>
 

@@ -30,7 +30,13 @@ const ContextApi = (props) => {
   const [symbolSec, setSymbolSec] = useState("");
   const toast = useRef(null);
   const [activeButton, setActiveButton] = useState('');
+  const [importantPoints, setImportantPoints] = useState([]);
+  const [selectedPivots, setSelectedPivots] = useState([]);
+  const [importantPointsKey, setImportantPointsKey] = useState([]);
+  const [selectedPivotsKey, setSelectedPivotsKey] = useState([]);
+  const [realTime, setRealTime] = useState("real")
 
+  console.log("Modo :", realTime);
 
 
   /*=========================================
@@ -48,13 +54,21 @@ const ContextApi = (props) => {
   };
 
   const graphicDataOne = async (symbolParam) => {
+    let response;
+    
     if (!symbolParam) return;
     try {
-      const response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbolParam}`);
+      if (realTime ==! 'real') {
+        response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbolParam}`);
+      } else {
+        response = await axios.get(`${url}/api/update_klines?symbol=${symbolParam}`);
+        return response;
+      }
       const data = response.data;
       const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => p.closeTime);
-
+      const time = data.map(p => {
+        return p.closeTime.split(' ')[0]; // Vai pegar só "27/05/2025"
+      });
       setDadosPrice(data);
       setLabels(time);
       setValues(prices);
@@ -92,7 +106,6 @@ const ContextApi = (props) => {
         detail: `Símbolo ${searchedSymbol} carregado com sucesso!`,
         life: 5000
       });
-      console.log('Dados atualizados:', { time, prices });
     } catch (error) {
       // ❌ Toast de erro
       toast.current.show({
@@ -131,7 +144,11 @@ const ContextApi = (props) => {
       const data = response.data;
 
       const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => p.closeTime);
+      const time = data.map(p => {
+        // p.closeTime está como "27/05/2025 13:00:00"
+        return p.closeTime.split(' ')[0]; // Vai pegar só "27/05/2025"
+      });
+
 
       setDadosPriceSecondary(data);
       setLabelsSecondary(time);
@@ -193,7 +210,11 @@ const ContextApi = (props) => {
       const response = await axios.get(url + "/api/filter_price_key");
       const data = response.data;
       const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => p.closeTime);
+      const time = data.map(p => {
+        // p.closeTime está como "27/05/2025 13:00:00"
+        return p.closeTime.split(' ')[0];
+      });
+
 
       setDadosPriceKey(data);
       setLabelsKey(time);
@@ -236,6 +257,8 @@ const ContextApi = (props) => {
         graphicDataOne(symbol)
         graphicDataSecondary(symbolSec)
         graphicDataKey()
+        handleGetPoints()
+        handleGetPointsKey()
 
         Swal.fire({
           title: "Alterado!",
@@ -275,6 +298,56 @@ const ContextApi = (props) => {
   };
 
 
+  // pega os pontos importantes
+  const handleGetPoints = async () => {
+    try {
+      const response = await axios.get(`${url}/api/trend_clarifications`);
+      const data = response.data;
+      if (data) {
+        setImportantPoints(data)
+      }
+    } catch (error) {
+      console.error("Erro ao buscar ponto importante:", error);
+    }
+  }
+
+
+  // Função para adicionar/remover pivôs
+  const togglePivot = (label, price, pivotName) => {
+    setSelectedPivots(prev => {
+      const exists = prev.find(p => p.valor === price && p.texto === label);
+      if (exists) {
+        return prev.filter(p => !(p.valor === price && p.texto === label));
+      } else {
+        return [...prev, { valor: price, texto: label, cor: 'white' }];
+      }
+    });
+  };
+
+  // pega pontos importantes chaves
+  const handleGetPointsKey = async () => {
+    try {
+      const response = await axios.get(`${url}/api/trend_clarifications_key`);
+      const data = response.data;
+      if (data) {
+        setImportantPointsKey(data);
+      }
+    } catch (error) {
+      console.error("Erro ao buscar ponto importante:", error);
+    }
+  }
+
+
+  const togglePivotKey = (label, price) => {
+    setSelectedPivotsKey(prev => {
+      const exists = prev.find(p => p.valor === price && p.texto === label);
+      if (exists) {
+        return prev.filter(p => !(p.valor === price && p.texto === label));
+      } else {
+        return [...prev, { valor: price, texto: label, cor: 'white' }];
+      }
+    });
+  };
 
 
 
@@ -360,7 +433,9 @@ const ContextApi = (props) => {
             graphicDataOne(savedSymbol),
             graphicDataSecondary(savedSymbolSec),
             graphicDataKey(),
-            handleGetTime()
+            handleGetTime(),
+            handleGetPoints(),
+            handleGetPointsKey()
           ]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
@@ -380,6 +455,8 @@ const ContextApi = (props) => {
           graphicDataOne(symbol), // Usa estado atual
           graphicDataSecondary(symbolSec), // Usa estado atual
           graphicDataKey(),
+          handleGetPoints(),
+          handleGetPointsKey()
         ]);
       } catch (error) {
         console.error("Erro ao atualizar dados no intervalo:", error);
@@ -412,7 +489,15 @@ const ContextApi = (props) => {
     symbol,
     symbolSec,
     handleClickTime,
-    activeButton
+    activeButton,
+    importantPoints,
+    togglePivot,
+    selectedPivots,
+    importantPointsKey,
+    togglePivotKey,
+    selectedPivotsKey,
+    setRealTime,
+    realTime
   };
 
   return (

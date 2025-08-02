@@ -2,7 +2,8 @@ from flask import Flask, jsonify
 from flask import request, jsonify
 from flask_cors import CORS
 from binance.client import Client
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+import time
 import logging
 from db import (
     create_table,
@@ -14,6 +15,18 @@ from db import (
     create_table_sec,
     create_table_timeframe_global,
     get_timeframe_global,
+    save_trend_clarifications,
+    create_table_trend_clarifications,
+    clear_table_trend_clarifications,
+    save_trend_clarifications_key,
+    clear_table_trend_clarifications_key,
+    create_table_trend_clarifications_key,
+    important_points,
+    important_points_key,
+    init_db,
+    save_klines,
+    conectar,
+    Delete_all_Klines,
 )
 
 
@@ -31,6 +44,11 @@ if __name__ == "__main__":
 
 create_table()
 create_table_sec()
+create_table_trend_clarifications()
+clear_table_trend_clarifications()
+create_table_trend_clarifications_key()
+clear_table_trend_clarifications_key()
+init_db()
 
 
 # Função para formatar os dados brutos da API da Binance
@@ -119,15 +137,63 @@ def filter_time():
         return jsonify({"time": time}), 200
 
 
-# 1️⃣ Endpoint primario
-@app.route("/api/filter_price_atr", methods=["GET", "POST"])
-def filter_price_atr():
-    # Pega o símbolo do query string
+# funcao para atualizar o klines salvos
+@app.route("/api/update_klines", methods=["GET", "POST"])
+def update_klines():
     symbol = request.args.get("symbol", "").strip().upper()
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
 
-    # 2) Apaga o que tinha e salva só o novo
+    salve_or_replace(symbol)  # salva no banco o símbolo atual
+    timeFrame = get_timeframe_global().lower()
+    print("📌 Intervalo usado:", timeFrame)
+
+    try:
+        download_and_save_klines(symbol, intervalo=timeFrame, dias=30)
+        return jsonify({"mensagem": f"Dados de {symbol} atualizados com sucesso!"})
+    except Exception as e:
+        print(f"❌ Erro ao baixar/salvar klines: {str(e)}")
+        return jsonify({"erro": str(e)}), 500
+
+
+# =============================================
+# 📊 Guarda no banco de dados dados do ativo
+# ############################################
+def download_and_save_klines(symbol, intervalo, dias=30, clean_before=True):
+    if clean_before:
+        Delete_all_Klines(symbol, intervalo)
+
+    start_ms = int(
+        (datetime.now(timezone.utc) - timedelta(days=dias)).timestamp() * 1000
+    )
+
+    all_klines = []
+    while True:
+        batch = client.get_klines(
+            symbol=symbol, interval=intervalo, startTime=start_ms, limit=1500
+        )
+        if not batch:
+            break
+        all_klines.extend(batch)
+        start_ms = batch[-1][0] + 1
+        time.sleep(0.3)
+
+    klines_formatados = [tuple(k[:11]) for k in all_klines]
+
+    conn = conectar()
+    save_klines(
+        conn, symbol, intervalo, klines_formatados
+    )  # agora vai com o valor correto
+    conn.close()
+
+
+# 1️⃣ Endpoint primario
+@app.route("/api/filter_price_atr", methods=["GET", "POST"])
+def filter_price_atr():
+    symbol = request.args.get("symbol", "").strip().upper()
+    if not symbol:
+        return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
+
     salve_or_replace(symbol)
 
     # 3) Recupera do banco (só pra confirmar ou usar daqui pra frente)
@@ -207,10 +273,6 @@ def filter_price_atr():
         variacao = preco - ponto_referencia
         movimento_adicionado = False  # Controle para evitar duplicação
         cont += 1
-
-        print(
-            f"→ [{estado.upper()}] Preço: {preco} | Ref: {ponto_referencia} | Var: {variacao:.2f} | Limite: {limite} cont: {cont}"
-        )
 
         # === ESTADO INICIAL ===
         # Detecta início de tendência
@@ -324,6 +386,8 @@ def filter_price_atr():
                     estado = "rally_natural"
                     topo = preco
                     ultimo_pivot_rally_alta = ultimo_pivot_rally_alta_temp
+                    ultimo_pivot_rally_baixa = None
+                    ponto_inicial = None
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -355,7 +419,6 @@ def filter_price_atr():
                 elif (
                     not movimento_adicionado
                     and ponto_inicial is not None
-                    and cont < 300
                     and preco < ponto_inicial - confirmar
                 ):
                     # Reversão para tendência de baixa
@@ -378,6 +441,26 @@ def filter_price_atr():
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
                     and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and preco < ultimo_pivot_baixa - confirmar
                 ):
 
                     # Reversão para tendência de baixa
@@ -420,6 +503,8 @@ def filter_price_atr():
                     estado = "rally_natural"
                     fundo = preco
                     ultimo_pivot_rally_baixa = ultimo_pivot_rally_baixa_temp
+                    ultimo_pivot_rally_alta = None
+                    ponto_inicial = None
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -453,7 +538,6 @@ def filter_price_atr():
                 elif (
                     not movimento_adicionado
                     and ponto_inicial is not None
-                    and cont < 300
                     and preco > ponto_inicial + confirmar
                 ):
                     # Reversão para tendência de alta
@@ -476,6 +560,25 @@ def filter_price_atr():
                     not movimento_adicionado
                     and ultimo_pivot_rally_baixa is not None
                     and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
                 ):
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
@@ -546,10 +649,11 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Baixa (reversão)",
+                            "tipo": "Tendência Baixa (reversão ----------------)",
                         }
                     )
                     movimento_adicionado = True
+                    print(f"pivo rally", {ultimo_pivot_rally_alta})
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
@@ -564,7 +668,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Alta)",
                         }
                     )
                     movimento_adicionado = True
@@ -637,7 +741,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Baixa)",
                         }
                     )
                     movimento_adicionado = True
@@ -679,7 +783,8 @@ def filter_price_atr():
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_alta is not None
-                    and preco > ultimo_pivot_reacao_sec_alta + confirmar
+                    and preco > fundo + limite
+                    and preco > ultimo_pivot_reacao_sec_alta
                     and preco < ultimo_pivot_alta
                 ):
                     #  volta ao rally
@@ -719,7 +824,25 @@ def filter_price_atr():
                 ):
                     estado = "tendencia_baixa"
                     tendencia_atual = "Baixa"
-                    ultimo_pivot_rally_alta = preco
+                    ultimo_pivot_baixa = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    ultimo_pivot_baixa = preco
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -766,7 +889,8 @@ def filter_price_atr():
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_baixa is not None
-                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                    and preco < topo - limite
+                    and preco < ultimo_pivot_reacao_sec_baixa
                     and preco > ultimo_pivot_baixa
                 ):
                     #  volta ao rally
@@ -807,7 +931,7 @@ def filter_price_atr():
                 ):
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
-                    ultimo_pivot_rally_baixa = preco
+                    ultimo_pivot_alta = preco
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -846,7 +970,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Alta)",
                         }
                     )
                     movimento_adicionado = True
@@ -865,6 +989,24 @@ def filter_price_atr():
                             "closeTime": tempo,
                             "closePrice": preco,
                             "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retomada)",
                         }
                     )
                     movimento_adicionado = True
@@ -895,6 +1037,7 @@ def filter_price_atr():
                     estado = "tendencia_baixa"
                     tendencia_atual = "Baixa"
                     fundo = preco
+                    ultimo_pivot_baixa = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -931,7 +1074,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Baixa)",
                         }
                     )
                     movimento_adicionado = True
@@ -953,6 +1096,7 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
+
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_baixa is not None
@@ -998,6 +1142,7 @@ def filter_price_atr():
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
                     topo = preco
+                    ultimo_pivot_alta = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -1009,11 +1154,22 @@ def filter_price_atr():
                     movimento_adicionado = True
 
     logger.info("\n=== MOVIMENTOS CLASSIFICADOS ===")
+    # Cria lista de tuplas para bulk insert
+    movimentos_para_salvar = []
+
     for p in movimentos:
+        date = p["closeTime"]
+        price = p["closePrice"]
+        type = p["tipo"]
+
         logger.info(
             f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}"
         )
+
+        movimentos_para_salvar.append((date, price, type))
     logger.info("=================================\n")
+    # Salva todos os dados de uma vez
+    save_trend_clarifications(movimentos_para_salvar)
 
     return jsonify(movimentos)
 
@@ -1236,6 +1392,8 @@ def filter_price_atr_second():
                     estado = "rally_natural"
                     topo = preco
                     ultimo_pivot_rally_alta = ultimo_pivot_rally_alta_temp
+                    ultimo_pivot_rally_baixa = None
+                    ponto_inicial = None
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -1267,7 +1425,6 @@ def filter_price_atr_second():
                 elif (
                     not movimento_adicionado
                     and ponto_inicial is not None
-                    and cont < 300
                     and preco < ponto_inicial - confirmar
                 ):
                     # Reversão para tendência de baixa
@@ -1290,6 +1447,26 @@ def filter_price_atr_second():
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
                     and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and preco < ultimo_pivot_baixa - confirmar
                 ):
 
                     # Reversão para tendência de baixa
@@ -1332,6 +1509,8 @@ def filter_price_atr_second():
                     estado = "rally_natural"
                     fundo = preco
                     ultimo_pivot_rally_baixa = ultimo_pivot_rally_baixa_temp
+                    ultimo_pivot_rally_alta = None
+                    ponto_inicial = None
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -1365,7 +1544,6 @@ def filter_price_atr_second():
                 elif (
                     not movimento_adicionado
                     and ponto_inicial is not None
-                    and cont < 300
                     and preco > ponto_inicial + confirmar
                 ):
                     # Reversão para tendência de alta
@@ -1388,6 +1566,25 @@ def filter_price_atr_second():
                     not movimento_adicionado
                     and ultimo_pivot_rally_baixa is not None
                     and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
                 ):
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
@@ -1458,10 +1655,11 @@ def filter_price_atr_second():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Baixa (reversão)",
+                            "tipo": "Tendência Baixa (reversão ----------------)",
                         }
                     )
                     movimento_adicionado = True
+                    print(f"pivo rally", {ultimo_pivot_rally_alta})
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
@@ -1476,7 +1674,7 @@ def filter_price_atr_second():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Alta)",
                         }
                     )
                     movimento_adicionado = True
@@ -1549,7 +1747,7 @@ def filter_price_atr_second():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Baixa)",
                         }
                     )
                     movimento_adicionado = True
@@ -1591,7 +1789,8 @@ def filter_price_atr_second():
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_alta is not None
-                    and preco > ultimo_pivot_reacao_sec_alta + confirmar
+                    and preco > fundo + limite
+                    and preco > ultimo_pivot_reacao_sec_alta
                     and preco < ultimo_pivot_alta
                 ):
                     #  volta ao rally
@@ -1631,7 +1830,25 @@ def filter_price_atr_second():
                 ):
                     estado = "tendencia_baixa"
                     tendencia_atual = "Baixa"
-                    ultimo_pivot_rally_alta = preco
+                    ultimo_pivot_baixa = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    ultimo_pivot_baixa = preco
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -1678,7 +1895,8 @@ def filter_price_atr_second():
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_baixa is not None
-                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                    and preco < topo - limite
+                    and preco < ultimo_pivot_reacao_sec_baixa
                     and preco > ultimo_pivot_baixa
                 ):
                     #  volta ao rally
@@ -1719,7 +1937,7 @@ def filter_price_atr_second():
                 ):
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
-                    ultimo_pivot_rally_baixa = preco
+                    ultimo_pivot_alta = preco
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -1758,7 +1976,7 @@ def filter_price_atr_second():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Alta)",
                         }
                     )
                     movimento_adicionado = True
@@ -1777,6 +1995,24 @@ def filter_price_atr_second():
                             "closeTime": tempo,
                             "closePrice": preco,
                             "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retomada)",
                         }
                     )
                     movimento_adicionado = True
@@ -1807,6 +2043,7 @@ def filter_price_atr_second():
                     estado = "tendencia_baixa"
                     tendencia_atual = "Baixa"
                     fundo = preco
+                    ultimo_pivot_baixa = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -1843,7 +2080,7 @@ def filter_price_atr_second():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Baixa)",
                         }
                     )
                     movimento_adicionado = True
@@ -1865,6 +2102,7 @@ def filter_price_atr_second():
                         }
                     )
                     movimento_adicionado = True
+
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_baixa is not None
@@ -1910,6 +2148,7 @@ def filter_price_atr_second():
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
                     topo = preco
+                    ultimo_pivot_alta = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -2202,6 +2441,8 @@ def filter_price_key():
                     estado = "rally_natural"
                     topo = preco
                     ultimo_pivot_rally_alta = ultimo_pivot_rally_alta_temp
+                    ultimo_pivot_rally_baixa = None
+                    ponto_inicial = None
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -2233,7 +2474,6 @@ def filter_price_key():
                 elif (
                     not movimento_adicionado
                     and ponto_inicial is not None
-                    and cont < 300
                     and preco < ponto_inicial - confirmar
                 ):
                     # Reversão para tendência de baixa
@@ -2256,6 +2496,26 @@ def filter_price_key():
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
                     and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+
+                    # Reversão para tendência de baixa
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    fundo = preco
+                    ultimo_pivot_baixa = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_baixa is not None
+                    and preco < ultimo_pivot_baixa - confirmar
                 ):
 
                     # Reversão para tendência de baixa
@@ -2298,6 +2558,8 @@ def filter_price_key():
                     estado = "rally_natural"
                     fundo = preco
                     ultimo_pivot_rally_baixa = ultimo_pivot_rally_baixa_temp
+                    ultimo_pivot_rally_alta = None
+                    ponto_inicial = None
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -2331,7 +2593,6 @@ def filter_price_key():
                 elif (
                     not movimento_adicionado
                     and ponto_inicial is not None
-                    and cont < 300
                     and preco > ponto_inicial + confirmar
                 ):
                     # Reversão para tendência de alta
@@ -2354,6 +2615,25 @@ def filter_price_key():
                     not movimento_adicionado
                     and ultimo_pivot_rally_baixa is not None
                     and preco > ultimo_pivot_rally_baixa + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    topo = preco
+                    ultimo_pivot_alta = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
                 ):
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
@@ -2428,6 +2708,7 @@ def filter_price_key():
                         }
                     )
                     movimento_adicionado = True
+                    print(f"pivo rally", {ultimo_pivot_rally_alta})
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
@@ -2442,7 +2723,7 @@ def filter_price_key():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Alta)",
                         }
                     )
                     movimento_adicionado = True
@@ -2515,7 +2796,7 @@ def filter_price_key():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Baixa)",
                         }
                     )
                     movimento_adicionado = True
@@ -2557,7 +2838,8 @@ def filter_price_key():
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_alta is not None
-                    and preco > ultimo_pivot_reacao_sec_alta + confirmar
+                    and preco > fundo + limite
+                    and preco > ultimo_pivot_reacao_sec_alta
                     and preco < ultimo_pivot_alta
                 ):
                     #  volta ao rally
@@ -2597,7 +2879,25 @@ def filter_price_key():
                 ):
                     estado = "tendencia_baixa"
                     tendencia_atual = "Baixa"
-                    ultimo_pivot_rally_alta = preco
+                    ultimo_pivot_baixa = preco
+                    fundo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Baixa (reversão)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_rally_alta is not None
+                    and preco < ultimo_pivot_rally_alta - confirmar
+                ):
+                    estado = "tendencia_baixa"
+                    tendencia_atual = "Baixa"
+                    ultimo_pivot_baixa = preco
                     fundo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -2644,7 +2944,8 @@ def filter_price_key():
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_baixa is not None
-                    and preco < ultimo_pivot_reacao_sec_baixa - confirmar
+                    and preco < topo - limite
+                    and preco < ultimo_pivot_reacao_sec_baixa
                     and preco > ultimo_pivot_baixa
                 ):
                     #  volta ao rally
@@ -2685,7 +2986,7 @@ def filter_price_key():
                 ):
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
-                    ultimo_pivot_rally_baixa = preco
+                    ultimo_pivot_alta = preco
                     topo = preco
                     ponto_referencia = preco
                     movimentos.append(
@@ -2724,7 +3025,7 @@ def filter_price_key():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Alta)",
                         }
                     )
                     movimento_adicionado = True
@@ -2743,6 +3044,24 @@ def filter_price_key():
                             "closeTime": tempo,
                             "closePrice": preco,
                             "tipo": "Rally Natural (retorno)",
+                        }
+                    )
+                    movimento_adicionado = True
+                elif (
+                    not movimento_adicionado
+                    and ultimo_pivot_alta is not None
+                    and preco > ultimo_pivot_alta + confirmar
+                ):
+                    estado = "tendencia_alta"
+                    tendencia_atual = "Alta"
+                    ultimo_pivot_alta = preco
+                    topo = preco
+                    ponto_referencia = preco
+                    movimentos.append(
+                        {
+                            "closeTime": tempo,
+                            "closePrice": preco,
+                            "tipo": "Tendência Alta (retomada)",
                         }
                     )
                     movimento_adicionado = True
@@ -2773,6 +3092,7 @@ def filter_price_key():
                     estado = "tendencia_baixa"
                     tendencia_atual = "Baixa"
                     fundo = preco
+                    ultimo_pivot_baixa = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -2809,7 +3129,7 @@ def filter_price_key():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária",
+                            "tipo": "Reação secundária (Baixa)",
                         }
                     )
                     movimento_adicionado = True
@@ -2831,6 +3151,7 @@ def filter_price_key():
                         }
                     )
                     movimento_adicionado = True
+
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_reacao_sec_baixa is not None
@@ -2876,6 +3197,7 @@ def filter_price_key():
                     estado = "tendencia_alta"
                     tendencia_atual = "Alta"
                     topo = preco
+                    ultimo_pivot_alta = preco
                     ponto_referencia = preco
                     movimentos.append(
                         {
@@ -2886,7 +3208,41 @@ def filter_price_key():
                     )
                     movimento_adicionado = True
 
+    logger.info("\n=== MOVIMENTOS CLASSIFICADOS ===")
+    # Cria lista de tuplas para bulk insert
+    movimentos_para_salvar = []
+
+    for p in movimentos:
+        date = p["closeTime"]
+        price = p["closePrice"]
+        type = p["tipo"]
+
+        movimentos_para_salvar.append((date, price, type))
+    logger.info("=================================\n")
+    # Salva todos os dados de uma vez
+    save_trend_clarifications_key(movimentos_para_salvar)
+
     return jsonify(movimentos)
+
+
+# ==============================================
+# funcao para retornar os pontos inportantes
+# ##############################################
+@app.route("/api/trend_clarifications", methods=["GET"])
+def trend_clarifications():
+    if request.method == "GET":
+        points = important_points()
+        return jsonify(points)
+
+
+# ==================================================
+# funcao para retornar os pontos inportantes chaves
+# ##################################################
+@app.route("/api/trend_clarifications_key", methods=["GET"])
+def trend_clarifications_key():
+    if request.method == "GET":
+        points = important_points_key()
+        return jsonify(points)
 
 
 @app.route("/")

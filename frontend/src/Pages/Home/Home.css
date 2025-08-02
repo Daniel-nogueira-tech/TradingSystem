@@ -31,12 +31,13 @@
 .container-results p {
   text-align: center;
   font-size: 1rem;
+  color: var(--white);
 }
 
 .container-results {
   flex: 1 1 250px;
   height: 100px;
-  background: var(--background);
+  background: var(--navbar-color);
   border-radius: 10px;
   padding: 10px;
   display: flex;

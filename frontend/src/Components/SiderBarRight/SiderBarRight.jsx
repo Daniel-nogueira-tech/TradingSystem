@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import './SiderBarRight.css';
 import { useEffect } from 'react';
+import { AppContext } from '../../ContextApi/ContextApi';
 
 const SiderBarRight = () => {
     const [quantity, setQuantity] = useState(0.01);
     const [isOn, setIsOn] = useState(false);
     const [activeAlgorithm, setActiveAlgorithm] = useState('')
+    const { setRealTime,realTime } = useContext(AppContext);
 
     const toggleSwitch = () => setIsOn(!isOn);
     useEffect(() => {
@@ -26,13 +28,21 @@ const SiderBarRight = () => {
         console.log(`Vendendo ${quantity} unidade(s)`);
     };
 
-    
+    const handleModel = () => {
+
+    }
+
+
 
     return (
         <div className="right-sidebar">
             <h3>Ordem Rápida</h3>
 
-            <select name="" id="" className='accountSimulation'>
+            <select
+                className='accountSimulation'
+                value={realTime}
+                onChange={(e) => setRealTime(e.target.value)}
+            >
                 <option value="simulação">Simulação</option>
                 <option value="real">Real time</option>
             </select>
