@@ -136,11 +136,10 @@ def get_timeframe_global():
         conn.close()
 
 
-# ===================
+# ====================================================================================
 # Cria banco de dados para armazenar as classificações de tendência de ativo primario.
-# ===================
-
-
+# ====================================================================================
+# Criação única da tabela (roda uma vez no setup ou no início)
 def create_table_trend_clarifications():
     conn = conectar()
     cursor = conn.cursor()
@@ -152,13 +151,13 @@ def create_table_trend_clarifications():
             price REAL NOT NULL,
             type TEXT NOT NULL
         )
-    """
+        """
     )
     conn.commit()
     conn.close()
 
 
-# limpa os dados antigos
+# Limpa todos os dados (opcional, se for sobrescrever)
 def clear_table_trend_clarifications():
     conn = conectar()
     cursor = conn.cursor()
@@ -167,28 +166,16 @@ def clear_table_trend_clarifications():
     conn.close()
 
 
+# Salva os dados classificados
 def save_trend_clarifications(movimentos):
     conn = conectar()
     cursor = conn.cursor()
 
-    # Cria a tabela, se não existir
-    cursor.execute(
-        """
-        CREATE TABLE IF NOT EXISTS trend_clarifications (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date INT NOT NULL,
-            price REAL NOT NULL,
-            type TEXT NOT NULL
-        )
-    """
-    )
-
-    # Limpa os dados antigos
-    cursor.execute("DELETE FROM trend_clarifications")
-
-    # Inserção em massa (mais rápido)
     cursor.executemany(
-        "INSERT INTO trend_clarifications (date, price, type) VALUES (?, ?, ?)",
+        """
+        INSERT INTO trend_clarifications (date, price, type)
+        VALUES (?, ?, ?)
+        """,
         movimentos,
     )
 
@@ -196,11 +183,21 @@ def save_trend_clarifications(movimentos):
     conn.close()
 
 
-# ===================
+# Pega dados salvos para simular
+def get_trend_clarifications():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT date, price, type FROM trend_clarifications ORDER BY date ASC"
+    )
+    dados = cursor.fetchall()
+    conn.close()
+    return dados
+
+
+# ==================================================================================
 # Cria banco de dados para armazenar as classificações de tendência de ativo chave.
-# ===================
-
-
+# ==================================================================================
 # cria tabela de classificações
 def create_table_trend_clarifications_key():
     conn = conectar()
@@ -458,7 +455,7 @@ def important_points_key():
 
 
 # ======================================================
-# salva dados da binance no banco
+# salva dados da binance no banco para simular
 ########################################################
 def init_db():
     conn = conectar()

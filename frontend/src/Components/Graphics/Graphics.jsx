@@ -7,7 +7,7 @@ import { AppContext } from '../../ContextApi/ContextApi';
 
 const Graphics = () => {
   const [value, setValue] = useState(500);
-  const { dadosPrice, dadosPriceSecondary, dadosPriceKey, activeButton, handleClickTime, importantPoints, importantPointsKey, togglePivot, togglePivotKey, selectedPivotsKeys } = useContext(AppContext);
+  const { dadosPrice, dadosPriceSecondary, dadosPriceKey, activeButton, handleClickTime, importantPoints, importantPointsKey, togglePivot, togglePivotKey, selectedPivotsKeys, setRealTime } = useContext(AppContext);
   const dadosTables = dadosPrice.reverse();
   const dadosTablesSec = dadosPriceSecondary.reverse();
   const dadosTablesKey = dadosPriceKey.reverse();
@@ -191,6 +191,18 @@ const Graphics = () => {
               : ''}`}
             onClick={() => handleClickTime('1d')}
           >1D</button>
+
+          <button
+            className={`button-time ${activeButton === '1d' ? 'active' : ''}`}
+            onClick={() => {
+              setRealTime('real');
+              window.location.reload();
+            }}
+          >
+            🔄 Atualizar
+          </button>
+
+
         </div>
 
         <div className="slider-container">
@@ -291,7 +303,7 @@ const Graphics = () => {
               <div className='price' onClick={() => togglePivotKey('Pivô', importantPointsKey?.["Rally secundária"]?.price)}>
                 <p>Reação secundária: {importantPointsKey?.["Rally secundária"]?.price ?? '---'}</p>
               </div>
-              
+
             </div>
           )}
         </div>
@@ -449,7 +461,7 @@ const Graphics = () => {
           Próxima
         </button>
       </div>
-    </div>
+    </div >
   )
 }
 

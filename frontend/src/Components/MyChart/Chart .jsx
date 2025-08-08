@@ -13,6 +13,8 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2'; // 👈 gráfico de barra agora
 import { AppContext } from '../../ContextApi/ContextApi';
+import { useEffect } from 'react';
+import { useState } from 'react';
 
 ChartJS.register(
     BarElement, // 👈 necessário para barras
@@ -26,7 +28,7 @@ ChartJS.register(
 );
 
 const ChartBar = () => {
-    const { values, labels, handleSearch, inputRefMain, symbol, importantPoints, selectedPivots } = useContext(AppContext);
+    const { values, labels, handleSearch, inputRefMain, symbol, selectedPivots, simulationLabelData, simulationValueData, realTime, setRealTime, isPaused, setIsPaused, isPausedRef } = useContext(AppContext);
     const chartRef = useRef();
 
     const handleZoomIn = () => {
@@ -41,23 +43,39 @@ const ChartBar = () => {
         if (chartRef.current) chartRef.current.resetZoom();
     };
 
-    if (!importantPoints || !importantPoints["Tendência"]) {
-        return <div>Carregando gráfico...</div>;
-    }
 
-    const backgroundColor = values.map((valor, index) => {
+    const activeValue = simulationValueData?.length > 0 ? simulationValueData : values;
+    const activeLabel = simulationLabelData?.length > 0 ? simulationLabelData : labels;
+
+    const backgroundColor = activeValue.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)';
-        return valor >= values[index - 1]
+        return valor >= activeValue[index - 1]
             ? 'rgba(0, 200, 0, 0.4)'
             : 'rgba(200, 0, 0, 0.4)';
     });
 
+    /* pega no localStore se e simulation ou real */
+    useEffect(() => {
+        const modoSalve = localStorage.getItem("realTimeMode");
+        if (modoSalve) {
+            setRealTime(modoSalve)
+        }
+    })
+    useEffect(() => {
+        if (realTime) {
+            localStorage.setItem("realTimeMode", realTime);
+        }
+    }, [realTime]);
+
+
+
+
     const data = {
-        labels: labels,
+        labels: activeLabel,
         datasets: [
             {
                 label: 'Tendência',
-                data: values,
+                data: activeValue,
                 backgroundColor: backgroundColor,
                 borderRadius: 6,
             },
@@ -140,8 +158,8 @@ const ChartBar = () => {
             y: {
                 beginAtZero: false,
                 type: 'linear',
-                suggestedMin: Math.min(...values) * 0.98,
-                suggestedMax: Math.max(...values) * 1.02,
+                suggestedMin: Math.min(...activeValue) * 0.98,
+                suggestedMax: Math.max(...activeValue) * 1.02,
             },
         },
     };
@@ -174,6 +192,16 @@ const ChartBar = () => {
                     <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>
                     <button className='btn-zoom' onClick={handleZoomOut}>Zoom -</button>
                     <button className='btn-zoom' onClick={handleResetZoom}>Reset</button>
+
+                    {realTime === 'simulation' && (
+                        <button
+                            className='btn-zoom'
+                            onClick={() => setIsPaused(prev => !prev)}
+                        >
+                            {isPaused ? '▶️ Continuar' : '⏸️ Pausar'}
+                        </button>
+                    )}
+
                 </div>
             </div>
 

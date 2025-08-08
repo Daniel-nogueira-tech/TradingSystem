@@ -34,10 +34,20 @@ const ContextApi = (props) => {
   const [selectedPivots, setSelectedPivots] = useState([]);
   const [importantPointsKey, setImportantPointsKey] = useState([]);
   const [selectedPivotsKey, setSelectedPivotsKey] = useState([]);
-  const [realTime, setRealTime] = useState("real")
+  const [realTime, setRealTime] = useState("");
+  const [simulationLabelData, setSimulationLabelData] = useState([]);
+  const [simulationValueData, setSimulationValueData] = useState([]);
+  const simulationTimeoutRef = useRef(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const isPausedRef = useRef(isPaused);
 
-  console.log("Modo :", realTime);
 
+  let offset = 0;
+  const limit = 10;
+
+
+
+  console.log("💾 Modo salvo:", realTime);
 
   /*=========================================
             1️⃣ Busca o simbolo Primario
@@ -53,30 +63,97 @@ const ContextApi = (props) => {
     }
   };
 
+  const LoadGraphicDataOne = async (symbolParam) => {
+    console.log("LoadGraphicDataOne chamado com modo:", realTime, "e símbolo:", symbolParam);
+    if (realTime === "real") {
+      await graphicDataOne(symbolParam);
+
+    } else if (realTime === "simulation") {
+      await graphicDataOneSimulate(symbolParam);
+    } else {
+      console.warn("Modo inválido:", realTime);
+    }
+  };
+
+
   const graphicDataOne = async (symbolParam) => {
-    let response;
-    
-    if (!symbolParam) return;
+    console.log("Modo --:", realTime);
+
+    // 🧹 Limpa dados da simulação
+    clearTimeout(simulationTimeoutRef.current);
+    setSimulationValueData([]);
+    setSimulationLabelData([]);
+
     try {
-      if (realTime ==! 'real') {
-        response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbolParam}`);
-      } else {
-        response = await axios.get(`${url}/api/update_klines?symbol=${symbolParam}`);
-        return response;
-      }
+      const response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbolParam}`);
       const data = response.data;
+
       const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => {
-        return p.closeTime.split(' ')[0]; // Vai pegar só "27/05/2025"
-      });
+      const time = data.map(p => p.closeTime.split(' ')[0]);
+
       setDadosPrice(data);
       setLabels(time);
       setValues(prices);
 
     } catch (error) {
-      console.error("Erro ao buscar dados da API:", error);
+      console.error("❌ Erro ao buscar dados em tempo real:", error);
     }
-  }
+  };
+
+
+  const graphicDataOneSimulate = async (symbolParam) => {
+    if (realTime !== 'simulation') {
+      console.log("❌ Ignorando graphicDataOneSimulate: modo não é simulação, modo atual:", realTime);
+      return;
+    }
+    try {
+      const modo = realTime;
+
+      await axios.get(`${url}/api/update_klines?symbol=${symbolParam}&modo=${modo}`);
+      const response = await axios.get(`${url}/api/simulate_price_atr?offset=${offset}&limit=${limit}`);
+      const data = response.data;
+
+      if (data.length === 0) {
+        console.log("✅ Simulação finalizada");
+        return;
+      }
+
+      const exibirDados = (index) => {
+        if (realTime !== 'simulation') {
+          console.log("🛑 Modo mudou durante a simulação, encerrando...");
+          return;
+        }
+
+        if (index >= data.length) {
+          offset += limit;
+          simulationTimeoutRef.current = setTimeout(() => {
+            graphicDataOneSimulate(symbolParam);
+          }, 100);
+          return;
+        }
+
+        const candle = data[index];
+
+        if (!isPausedRef.current) {
+          console.log("🕒 Simulando:", candle.closeTime, candle.closePrice);
+          setSimulationValueData(prev => [...prev, parseFloat(candle.closePrice)]);
+          setSimulationLabelData(prev => [...prev, candle.closeTime.split(' ')[0]]);
+
+          simulationTimeoutRef.current = setTimeout(() => exibirDados(index + 1), 100);
+        } else {
+          // Pausado: tenta de novo o mesmo index após delay
+          console.log("⏸️ Pausado...");
+          simulationTimeoutRef.current = setTimeout(() => exibirDados(index), 100);
+        }
+
+      };
+
+      exibirDados(0);
+    } catch (error) {
+      console.error("❌ Erro ao buscar dados de simulação:", error);
+      clearTimeout(simulationTimeoutRef.current);
+    }
+  };
 
   // faz pequisa do simbolo envia para backend
   const handleSearch = async (event) => {
@@ -420,22 +497,36 @@ const ContextApi = (props) => {
   };
 
 
+  useEffect(() => {
+    if (realTime === "real") {
+      clearTimeout(simulationTimeoutRef.current);
+      setSimulationValueData([]);
+      setSimulationLabelData([]);
+      offset = 0; // reinicia para caso volte pra simulação depois
+    }
+  }, [realTime]);
+
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
+
+
 
   useEffect(() => {
     async function loadData() {
       try {
-        // Busca símbolos iniciais
         const savedSymbol = await getSymbol();
         const savedSymbolSec = await getSymbolSec();
 
         if (savedSymbol || savedSymbolSec) {
           await Promise.all([
-            graphicDataOne(savedSymbol),
+            LoadGraphicDataOne(savedSymbol),
             graphicDataSecondary(savedSymbolSec),
             graphicDataKey(),
             handleGetTime(),
             handleGetPoints(),
-            handleGetPointsKey()
+            handleGetPointsKey(),
           ]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
@@ -445,27 +536,24 @@ const ContextApi = (props) => {
       }
     }
 
-    // Carrega dados iniciais
     loadData();
 
-    // Configura intervalo para atualizar dados a cada 60 segundos
     const interval = setInterval(async () => {
       try {
         await Promise.all([
-          graphicDataOne(symbol), // Usa estado atual
-          graphicDataSecondary(symbolSec), // Usa estado atual
+          graphicDataSecondary(symbolSec),
           graphicDataKey(),
           handleGetPoints(),
-          handleGetPointsKey()
+          handleGetPointsKey(),
         ]);
       } catch (error) {
         console.error("Erro ao atualizar dados no intervalo:", error);
       }
     }, 60000);
 
-    // Limpa intervalo ao desmontar componente
     return () => clearInterval(interval);
-  }, []); // Array de dependências vazio é suficiente, pois usamos estados diretamente
+  }, [symbol, symbolSec, realTime]); // Adicione realTime como dependência
+
 
   const contextValue = {
     handleSave,
@@ -497,7 +585,12 @@ const ContextApi = (props) => {
     togglePivotKey,
     selectedPivotsKey,
     setRealTime,
-    realTime
+    realTime,
+    simulationLabelData,
+    simulationValueData,
+    isPaused,
+    setIsPaused,
+    isPausedRef
   };
 
   return (

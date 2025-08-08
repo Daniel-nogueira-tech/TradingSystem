@@ -7,7 +7,7 @@ const SiderBarRight = () => {
     const [quantity, setQuantity] = useState(0.01);
     const [isOn, setIsOn] = useState(false);
     const [activeAlgorithm, setActiveAlgorithm] = useState('')
-    const { setRealTime,realTime } = useContext(AppContext);
+    const { setRealTime, realTime } = useContext(AppContext);
 
     const toggleSwitch = () => setIsOn(!isOn);
     useEffect(() => {
@@ -28,10 +28,6 @@ const SiderBarRight = () => {
         console.log(`Vendendo ${quantity} unidade(s)`);
     };
 
-    const handleModel = () => {
-
-    }
-
 
 
     return (
@@ -41,9 +37,13 @@ const SiderBarRight = () => {
             <select
                 className='accountSimulation'
                 value={realTime}
-                onChange={(e) => setRealTime(e.target.value)}
+                onChange={(e) => {
+                    const modo = e.target.value;
+                    setRealTime(modo);
+                    localStorage.setItem("realTimeMode", modo);
+                }}
             >
-                <option value="simulação">Simulação</option>
+                <option value="simulation">Simulação</option>
                 <option value="real">Real time</option>
             </select>
 

@@ -27,6 +27,8 @@ from db import (
     save_klines,
     conectar,
     Delete_all_Klines,
+    get_data_klines,
+    get_trend_clarifications,
 )
 
 
@@ -117,6 +119,16 @@ def get_last_symbol():
         return jsonify({"message": "Nenhum símbolo salvo"}), 404
 
 
+# 🔍 2️⃣Consultar o último símbolo salvo do ativo secundario
+@app.route("/api/last_symbol_second", methods=["GET"])
+def get_last_symbol_sec():
+    symbol = symbolo_saved_sec()
+    if symbol:
+        return jsonify({"symbol": symbol}), 200
+    else:
+        return jsonify({"message": "Nenhum símbolo salvo"}), 404
+
+
 # 1️⃣ Endpoint para mudar tempo grafico
 @app.route("/api/timeframe", methods=["GET", "POST"])
 def filter_time():
@@ -146,10 +158,9 @@ def update_klines():
 
     salve_or_replace(symbol)  # salva no banco o símbolo atual
     timeFrame = get_timeframe_global().lower()
-    print("📌 Intervalo usado:", timeFrame)
 
     try:
-        download_and_save_klines(symbol, intervalo=timeFrame, dias=30)
+        download_and_save_klines(symbol, intervalo=timeFrame, dias=90)
         return jsonify({"mensagem": f"Dados de {symbol} atualizados com sucesso!"})
     except Exception as e:
         print(f"❌ Erro ao baixar/salvar klines: {str(e)}")
@@ -159,7 +170,7 @@ def update_klines():
 # =============================================
 # 📊 Guarda no banco de dados dados do ativo
 # ############################################
-def download_and_save_klines(symbol, intervalo, dias=30, clean_before=True):
+def download_and_save_klines(symbol, intervalo, dias=90, clean_before=True):
     if clean_before:
         Delete_all_Klines(symbol, intervalo)
 
@@ -187,10 +198,39 @@ def download_and_save_klines(symbol, intervalo, dias=30, clean_before=True):
     conn.close()
 
 
+# =========================================================
+# 📊 pega no banco de dados dados do ativo para simulacao primario
+# #########################################################
+@app.route("/api/simulate_price_atr", methods=["GET"])
+def simulate_price_atr():
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 10))
+
+    movimentos = get_trend_clarifications()
+
+    if not movimentos:
+        return jsonify([])  # Nada para simular
+
+    movimentos_fatiados = movimentos[offset : offset + limit]
+
+    dados = [
+        {
+            "closeTime": m[0],
+            "closePrice": m[1],
+            "tipo": m[2],
+        }
+        for m in movimentos_fatiados
+    ]
+
+    return jsonify(dados)
+
+
 # 1️⃣ Endpoint primario
 @app.route("/api/filter_price_atr", methods=["GET", "POST"])
 def filter_price_atr():
     symbol = request.args.get("symbol", "").strip().upper()
+    modo = request.args.get("modo", "").strip().lower()
+
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
 
@@ -202,14 +242,24 @@ def filter_price_atr():
     # 4) Busca os klines na Binance
     klines = get_timeframe_global()
     try:
-        dados_brutos = client.get_klines(
-            symbol=symbol_primary, interval=klines, limit=1500
-        )
+        if modo == "simulation":
+            # 🔁 Pega os dados do banco
+            dados_brutos = get_data_klines(symbol_primary, klines)
+            dados = formatar_dados_brutos(dados_brutos)
+
+        else:
+            # 🔁 Pega os dados em tempo real da Binance
+            dados_brutos = client.get_klines(
+                symbol=symbol_primary, interval=klines, limit=1500
+            )
+            dados = formatar_dados_brutos(dados_brutos)
+
     except Exception as e:
         print(f"❌ Erro Binance: {str(e)}")
         return jsonify({"erro": str(e)}), 500
 
-    # Formata os dados e extrai preços de fechamento e temposs
+    # Formata os dados e extrai preços de fechamento e tempos
+
     dados = formatar_dados_brutos(dados_brutos)
     closes = [item["Fechamento"] for item in dados]
     timestamps = [item["Tempo"] for item in dados]
@@ -221,10 +271,7 @@ def filter_price_atr():
     if not atr_suave:
         return jsonify({"erro": "ATR não pôde ser calculado."}), 400
 
-    if klines == "15m":
-        verify_time_multiply = 5
-    else:
-        verify_time_multiply = 4
+    verify_time_multiply = 4
 
     # Define os limites com base no ATR
     atr_ultima_suave = atr_suave[-1]["ATR_Suavizado"]
@@ -649,7 +696,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Tendência Baixa (reversão ----------------)",
+                            "tipo": "Tendência Baixa (reversão)",
                         }
                     )
                     movimento_adicionado = True
@@ -1168,20 +1215,13 @@ def filter_price_atr():
 
         movimentos_para_salvar.append((date, price, type))
     logger.info("=================================\n")
+
+    # 🔁 Limpa os dados antigos da tabela antes de salvar os novos
+    clear_table_trend_clarifications()
     # Salva todos os dados de uma vez
     save_trend_clarifications(movimentos_para_salvar)
 
     return jsonify(movimentos)
-
-
-# 🔍 2️⃣Consultar o último símbolo salvo do ativo secundario
-@app.route("/api/last_symbol_second", methods=["GET"])
-def get_last_symbol_sec():
-    symbol = symbolo_saved_sec()
-    if symbol:
-        return jsonify({"symbol": symbol}), 200
-    else:
-        return jsonify({"message": "Nenhum símbolo salvo"}), 404
 
 
 # 2️⃣ End Pont para pegar dados secundarios
@@ -1823,24 +1863,6 @@ def filter_price_atr_second():
                             "tipo": "Tendência Alta (retorno)",
                         }
                     )
-                elif (
-                    not movimento_adicionado
-                    and ultimo_pivot_rally_alta is not None
-                    and preco < ultimo_pivot_rally_alta - confirmar
-                ):
-                    estado = "tendencia_baixa"
-                    tendencia_atual = "Baixa"
-                    ultimo_pivot_baixa = preco
-                    fundo = preco
-                    ponto_referencia = preco
-                    movimentos.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": preco,
-                            "tipo": "Tendência Baixa (reversão)",
-                        }
-                    )
-                    movimento_adicionado = True
                 elif (
                     not movimento_adicionado
                     and ultimo_pivot_rally_alta is not None
@@ -3226,7 +3248,7 @@ def filter_price_key():
 
 
 # ==============================================
-# funcao para retornar os pontos inportantes
+# funcao para retornar os pontos importantes
 # ##############################################
 @app.route("/api/trend_clarifications", methods=["GET"])
 def trend_clarifications():
@@ -3236,7 +3258,7 @@ def trend_clarifications():
 
 
 # ==================================================
-# funcao para retornar os pontos inportantes chaves
+# funcao para retornar os pontos importantes chaves
 # ##################################################
 @app.route("/api/trend_clarifications_key", methods=["GET"])
 def trend_clarifications_key():
