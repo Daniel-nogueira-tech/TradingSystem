@@ -12,6 +12,8 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { AppContext } from '../../ContextApi/ContextApi';
+import { ProgressSpinner } from 'primereact/progressspinner';
+
 
 ChartJS.register(
     BarElement,
@@ -25,26 +27,32 @@ ChartJS.register(
 );
 
 const ChartBarKey = () => {
-    const { labelsKey, valuesKey, symbol, symbolSec, importantPointsKey, selectedPivotsKey } = useContext(AppContext);
+    const { labelsKey, valuesKey, symbol, symbolSec, importantPointsKey, selectedPivotsKey, simulationLabelDataKey, simulationValueDataKey } = useContext(AppContext);
 
-    if (!importantPointsKey || !importantPointsKey["Tendência"]) {
-        return <div>Carregando gráfico...</div>;
+    if (!labelsKey || !valuesKey) {
+        return <ProgressSpinner />;
     }
 
+    const activeValue = simulationValueDataKey?.length > 0 ? simulationValueDataKey : valuesKey;
+    const activeLabel = simulationLabelDataKey?.length > 0 ? simulationLabelDataKey : labelsKey;
+
+
     // Gerar cores com base na comparação com o valor anterior
-    const backgroundColor = valuesKey.map((valor, index) => {
+    const backgroundColor = activeValue.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)'; // primeiro valor (neutro)
-        return valor >= valuesKey[index - 1]
+        return valor >= activeValue[index - 1]
             ? 'rgba(168, 186, 10, 0.84)'   // verde se maior ou igual
             : 'rgba(163, 163, 163, 0.63)'; // vermelho se menor
     });
 
+
+
     const data = {
-        labels: labelsKey,
+        labels: activeLabel,
         datasets: [
             {
                 label: 'Chave',
-                data: valuesKey,
+                data: activeValue,
                 backgroundColor: backgroundColor,
                 borderRadius: 6,
             },
@@ -52,7 +60,7 @@ const ChartBarKey = () => {
     };
 
     // Plugin que desenha texto em cima das barras
-  const customLabelPlugin = {
+    const customLabelPlugin = {
         id: 'customLabelPlugin',
         afterDatasetsDraw(chart) {
             const { ctx, chartArea, scales } = chart;
@@ -125,8 +133,8 @@ const ChartBarKey = () => {
             y: {
                 beginAtZero: false,
                 type: 'linear',
-                suggestedMin: Math.min(...valuesKey) * 0.98,
-                suggestedMax: Math.max(...valuesKey) * 1.02,
+                suggestedMin: Math.min(...activeValue) * 0.98,
+                suggestedMax: Math.max(...activeLabel) * 1.02,
             },
         },
     };

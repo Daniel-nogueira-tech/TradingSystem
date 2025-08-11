@@ -14,7 +14,6 @@ import {
 import { Bar } from 'react-chartjs-2'; // 👈 gráfico de barra agora
 import { AppContext } from '../../ContextApi/ContextApi';
 import { useEffect } from 'react';
-import { useState } from 'react';
 
 ChartJS.register(
     BarElement, // 👈 necessário para barras
@@ -28,7 +27,7 @@ ChartJS.register(
 );
 
 const ChartBar = () => {
-    const { values, labels, handleSearch, inputRefMain, symbol, selectedPivots, simulationLabelData, simulationValueData, realTime, setRealTime, isPaused, setIsPaused, isPausedRef } = useContext(AppContext);
+    const { values, labels, handleSearch, inputRefMain, symbol, selectedPivots, simulationLabelData, simulationValueData, realTime, setRealTime, isPaused, setIsPaused } = useContext(AppContext);
     const chartRef = useRef();
 
     const handleZoomIn = () => {
@@ -47,6 +46,7 @@ const ChartBar = () => {
     const activeValue = simulationValueData?.length > 0 ? simulationValueData : values;
     const activeLabel = simulationLabelData?.length > 0 ? simulationLabelData : labels;
 
+    
     const backgroundColor = activeValue.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)';
         return valor >= activeValue[index - 1]

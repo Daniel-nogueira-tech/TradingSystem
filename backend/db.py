@@ -195,6 +195,64 @@ def get_trend_clarifications():
     return dados
 
 
+# ====================================================================================
+# Cria banco de dados para armazenar as classificações de tendência de ativo secundario.
+# ====================================================================================
+# Criação única da tabela (roda uma vez no setup ou no início)
+def create_table_trend_clarifications_sec():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS trend_clarifications_sec (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            date INT NOT NULL,
+            price REAL NOT NULL,
+            type TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+# Limpa todos os dados (opcional, se for sobrescrever)
+def clear_table_trend_clarifications_sec():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM trend_clarifications_sec")
+    conn.commit()
+    conn.close()
+
+
+# Salva os dados classificados
+def save_trend_clarifications_sec(movimentos):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.executemany(
+        """
+        INSERT INTO trend_clarifications_sec (date, price, type)
+        VALUES (?, ?, ?)
+        """,
+        movimentos,
+    )
+    conn.commit()
+    conn.close()
+
+
+# Pega dados salvos para simular
+def get_trend_clarifications_sec():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT date, price, type FROM trend_clarifications_sec ORDER BY date ASC"
+    )
+    dados = cursor.fetchall()
+    conn.close()
+    return dados
+
+
 # ==================================================================================
 # Cria banco de dados para armazenar as classificações de tendência de ativo chave.
 # ==================================================================================
@@ -252,6 +310,18 @@ def save_trend_clarifications_key(movimentos):
 
     conn.commit()
     conn.close()
+
+
+# Pega dados salvos para simular
+def get_trend_clarifications_key():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT date, price, type FROM trend_clarifications_key ORDER BY date ASC"
+    )
+    dados = cursor.fetchall()
+    conn.close()
+    return dados
 
 
 # ==============================================
@@ -454,9 +524,9 @@ def important_points_key():
     return result if result else {"mensagem": "Nenhum ponto encontrado"}
 
 
-# ======================================================
-# salva dados da binance no banco para simular
-########################################################
+# ============================================================
+# salva dados da binance no banco para simular ativo primario
+##############################################################
 def init_db():
     conn = conectar()
     cursor = conn.cursor()
@@ -484,6 +554,7 @@ def init_db():
     conn.close()
 
 
+# insere os klines no banco
 def save_klines(conn, symbol, intervalo, klines):
     cursor = conn.cursor()
 
@@ -503,6 +574,7 @@ def save_klines(conn, symbol, intervalo, klines):
     conn.commit()
 
 
+# deleta os dados
 def Delete_all_Klines(symbol, intervalo):
     conn = conectar()
     cursor = conn.cursor()
@@ -516,6 +588,7 @@ def Delete_all_Klines(symbol, intervalo):
     conn.close()
 
 
+# pega os dados do banco para classificação
 def get_data_klines(symbol, intervalo):
     conn = conectar()
     cursor = conn.cursor()
@@ -523,6 +596,89 @@ def get_data_klines(symbol, intervalo):
         """
         SELECT open_time, open, high, low, close, volume
         FROM klines
+        WHERE symbol = ? AND intervalo = ?
+        ORDER BY open_time
+        """,
+        (symbol, intervalo),
+    )
+    resultados = cursor.fetchall()
+    conn.close()
+    return resultados
+
+
+# ============================================================
+# salva dados da binance no banco para simular ativo sec
+##############################################################
+# (Primeiro salva os dados brutos no banco klines_sec depois fazer aclassificacao )
+def init_db_sec():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS klines_sec (
+            symbol TEXT,
+            intervalo TEXT,
+            open_time INTEGER,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume REAL,
+            close_time INTEGER,
+            quote_asset_volume REAL,
+            number_of_trades INTEGER,
+            taker_buy_base_asset_volume REAL,
+            taker_buy_quote_asset_volume REAL,
+            PRIMARY KEY (symbol, intervalo, open_time)
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+# insere os klines no banco
+def save_klines_sec(conn, symbol, intervalo, klines):
+    cursor = conn.cursor()
+
+    dados_completos = [(symbol, intervalo, *k) for k in klines]
+
+    cursor.executemany(
+        """
+        INSERT OR REPLACE INTO klines_sec (
+            symbol, intervalo, open_time, open, high, low, close, volume,
+            close_time, quote_asset_volume, number_of_trades,
+            taker_buy_base_asset_volume, taker_buy_quote_asset_volume
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        dados_completos,
+    )
+    conn.commit()
+
+
+# deleta os dados
+def Delete_all_Klines_sec(symbol, intervalo):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        DELETE FROM klines_sec WHERE symbol = ? AND intervalo = ?
+        """,
+        (symbol, intervalo),
+    )
+    conn.commit()
+    conn.close()
+
+
+# pega os dados do banco para classificação
+def get_data_klines_sec(symbol, intervalo):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT open_time, open, high, low, close, volume
+        FROM klines_sec
         WHERE symbol = ? AND intervalo = ?
         ORDER BY open_time
         """,

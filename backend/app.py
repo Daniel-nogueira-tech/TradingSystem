@@ -29,6 +29,15 @@ from db import (
     Delete_all_Klines,
     get_data_klines,
     get_trend_clarifications,
+    Delete_all_Klines_sec,
+    save_klines_sec,
+    create_table_trend_clarifications_sec,
+    get_trend_clarifications_sec,
+    get_data_klines_sec,
+    init_db_sec,
+    clear_table_trend_clarifications_sec,
+    save_trend_clarifications_sec,
+    get_trend_clarifications_key,
 )
 
 
@@ -48,9 +57,11 @@ create_table()
 create_table_sec()
 create_table_trend_clarifications()
 clear_table_trend_clarifications()
+create_table_trend_clarifications_sec()
 create_table_trend_clarifications_key()
 clear_table_trend_clarifications_key()
 init_db()
+init_db_sec()
 
 
 # Função para formatar os dados brutos da API da Binance
@@ -119,17 +130,7 @@ def get_last_symbol():
         return jsonify({"message": "Nenhum símbolo salvo"}), 404
 
 
-# 🔍 2️⃣Consultar o último símbolo salvo do ativo secundario
-@app.route("/api/last_symbol_second", methods=["GET"])
-def get_last_symbol_sec():
-    symbol = symbolo_saved_sec()
-    if symbol:
-        return jsonify({"symbol": symbol}), 200
-    else:
-        return jsonify({"message": "Nenhum símbolo salvo"}), 404
-
-
-# 1️⃣ Endpoint para mudar tempo grafico
+# 1️⃣ Endpoint para mudar tempo grafico (em todos graficos)
 @app.route("/api/timeframe", methods=["GET", "POST"])
 def filter_time():
 
@@ -149,7 +150,7 @@ def filter_time():
         return jsonify({"time": time}), 200
 
 
-# funcao para atualizar o klines salvos
+# 1️⃣  funcao para atualizar o klines salvos para simular primeiro ativo
 @app.route("/api/update_klines", methods=["GET", "POST"])
 def update_klines():
     symbol = request.args.get("symbol", "").strip().upper()
@@ -168,7 +169,7 @@ def update_klines():
 
 
 # =============================================
-# 📊 Guarda no banco de dados dados do ativo
+# 📊1️⃣  Guarda no banco de dados dados do ativo
 # ############################################
 def download_and_save_klines(symbol, intervalo, dias=90, clean_before=True):
     if clean_before:
@@ -199,7 +200,7 @@ def download_and_save_klines(symbol, intervalo, dias=90, clean_before=True):
 
 
 # =========================================================
-# 📊 pega no banco de dados dados do ativo para simulacao primario
+# 📊 1️⃣ pega no banco de dados dados do ativo para simulacao primario
 # #########################################################
 @app.route("/api/simulate_price_atr", methods=["GET"])
 def simulate_price_atr():
@@ -207,6 +208,117 @@ def simulate_price_atr():
     limit = int(request.args.get("limit", 10))
 
     movimentos = get_trend_clarifications()
+
+    if not movimentos:
+        return jsonify([])  # Nada para simular
+
+    movimentos_fatiados = movimentos[offset : offset + limit]
+
+    dados = [
+        {
+            "closeTime": m[0],
+            "closePrice": m[1],
+            "tipo": m[2],
+        }
+        for m in movimentos_fatiados
+    ]
+
+    return jsonify(dados)
+
+
+# 🔍 2️⃣Consultar o último símbolo salvo do ativo secundario
+@app.route("/api/last_symbol_second", methods=["GET"])
+def get_last_symbol_sec():
+    symbol = symbolo_saved_sec()
+    if symbol:
+        return jsonify({"symbol": symbol}), 200
+    else:
+        return jsonify({"message": "Nenhum símbolo salvo"}), 404
+
+
+# 2️⃣ funcao para atualizar o klines salvos para simular segundo ativo
+@app.route("/api/update_klines_sec", methods=["GET", "POST"])
+def update_klines_sec():
+    symbol = request.args.get("symbol", "").strip().upper()
+    if not symbol:
+        return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
+
+    salve_or_replace_sec(symbol)  # salva no banco o símbolo atual
+    timeFrame = get_timeframe_global().lower()
+
+    try:
+        download_and_save_klines_sec(symbol, intervalo=timeFrame, dias=90)
+        return jsonify({"mensagem": f"Dados de {symbol} atualizados com sucesso!"})
+    except Exception as e:
+        print(f"❌ Erro ao baixar/salvar klines: {str(e)}")
+        return jsonify({"erro": str(e)}), 500
+
+
+# ==================================================--
+# 📊2️⃣  Guarda no banco de dados dados do ativo sec
+# ##################################################
+def download_and_save_klines_sec(symbol, intervalo, dias=90, clean_before=True):
+    if clean_before:
+        Delete_all_Klines_sec(symbol, intervalo)
+
+    start_ms = int(
+        (datetime.now(timezone.utc) - timedelta(days=dias)).timestamp() * 1000
+    )
+
+    all_klines = []
+    while True:
+        batch = client.get_klines(
+            symbol=symbol, interval=intervalo, startTime=start_ms, limit=1500
+        )
+        if not batch:
+            break
+        all_klines.extend(batch)
+        start_ms = batch[-1][0] + 1
+        time.sleep(0.3)
+
+    klines_formatados = [tuple(k[:11]) for k in all_klines]
+
+    conn = conectar()
+    save_klines_sec(conn, symbol, intervalo, klines_formatados)  # salva os dados
+    conn.close()
+
+
+# =========================================================
+# 📊 2️⃣ pega no banco de dados dados do ativo para simulacao secundaria
+# #########################################################
+@app.route("/api/simulate_price_atr_sec", methods=["GET"])
+def simulate_price_atr_sec():
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 10))
+
+    movimentos = get_trend_clarifications_sec()
+
+    if not movimentos:
+        return jsonify([])  # Nada para simular
+
+    movimentos_fatiados = movimentos[offset : offset + limit]
+
+    dados = [
+        {
+            "closeTime": m[0],
+            "closePrice": m[1],
+            "tipo": m[2],
+        }
+        for m in movimentos_fatiados
+    ]
+
+    return jsonify(dados)
+
+
+# =================================================================
+# 📊 3 pega no banco de dados dados do ativo para simulacao chave
+# #################################################################
+@app.route("/api/simulate_price_atr_key", methods=["GET"])
+def simulate_price_atr_key():
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 10))
+
+    movimentos = get_trend_clarifications_key()
 
     if not movimentos:
         return jsonify([])  # Nada para simular
@@ -236,10 +348,10 @@ def filter_price_atr():
 
     salve_or_replace(symbol)
 
-    # 3) Recupera do banco (só pra confirmar ou usar daqui pra frente)
+    #  Recupera do banco (só pra confirmar ou usar daqui pra frente)
     symbol_primary = symbolo_saved()
 
-    # 4) Busca os klines na Binance
+    #  Busca os klines na Binance
     klines = get_timeframe_global()
     try:
         if modo == "simulation":
@@ -1209,10 +1321,6 @@ def filter_price_atr():
         price = p["closePrice"]
         type = p["tipo"]
 
-        logger.info(
-            f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}"
-        )
-
         movimentos_para_salvar.append((date, price, type))
     logger.info("=================================\n")
 
@@ -1228,17 +1336,18 @@ def filter_price_atr():
 @app.route("/api/filter_price_atr_second", methods=["GET", "POST"])
 def filter_price_atr_second():
     symbol = request.args.get("symbol").strip().upper()
+    modo = request.args.get("modo", "").strip().lower()
 
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
 
-    # 2) Apaga o que tinha e salva só o novo
+    # Apaga o que tinha e salva só o novo
     salve_or_replace_sec(symbol)
 
-    # 3) Recupera do banco (só pra confirmar ou usar daqui pra frente)
+    # Recupera do banco (só pra confirmar ou usar daqui pra frente)
     symbol_second = symbolo_saved_sec()
 
-    # 4) Busca os klines na Binance
+    # Busca os klines na Binance
     klines = get_timeframe_global()
 
     if not klines:
@@ -1248,9 +1357,17 @@ def filter_price_atr_second():
         )
 
     try:
-        dados_brutos = client.get_klines(
-            symbol=symbol_second, interval=klines, limit=1500
-        )
+        if modo == "simulation":
+            # 🔁 Pega os dados do banco
+            dados_brutos = get_data_klines_sec(symbol_second, klines)
+            dados = formatar_dados_brutos(dados_brutos)
+
+        else:
+            # 🔁 Pega os dados em tempo real da Binance
+            dados_brutos = client.get_klines(
+                symbol=symbol_second, interval=klines, limit=1500
+            )
+
     except Exception as e:
         print(f"❌ Erro Binance: {str(e)}")
         return jsonify({"erro": str(e)}), 500
@@ -2181,43 +2298,73 @@ def filter_price_atr_second():
                     )
                     movimento_adicionado = True
 
+    logger.info("\n=== MOVIMENTOS CLASSIFICADOS ===")
+    # Cria lista de tuplas para bulk insert
+    movimentos_para_salvar = []
+
+    for p in movimentos:
+        date = p["closeTime"]
+        price = p["closePrice"]
+        type = p["tipo"]
+
+        logger.info(
+            f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}"
+        )
+
+        movimentos_para_salvar.append((date, price, type))
+    logger.info("=================================\n")
+
+    # 🔁 Limpa os dados antigos da tabela antes de salvar os novos
+    clear_table_trend_clarifications_sec()
+    # Salva todos os dados de uma vez
+    save_trend_clarifications_sec(movimentos_para_salvar)
+
     return jsonify(movimentos)
 
 
 @app.route("/api/filter_price_key", methods=["GET", "POST"])
 def filter_price_key():
-
+    modo = request.args.get("modo", "").strip().lower()
     symbol_primary = symbolo_saved()
     symbol_second = symbolo_saved_sec()
 
     if not symbol_primary or not symbol_second:
         return jsonify({"erro": "Símbolos primário ou secundário não encontrados"}), 400
 
-    klines = get_timeframe_global()
+    time_frame = get_timeframe_global()
 
-    if not klines:
+    if not time_frame:
         return (
             jsonify({"erro": "Intervalo de tempo não encontrado no banco de dados"}),
             500,
         )
 
     try:
-        dados_btc_bruto = client.get_klines(
-            symbol=symbol_primary,
-            interval=klines,
-            limit=1500,
-        )
-        dados_eth_bruto = client.get_klines(
-            symbol=symbol_second,
-            interval=klines,
-            limit=1500,
-        )
+        if modo == "simulation":
+            # 🔁 Pega os dados do banco
+            dados_pri_bruto = get_data_klines(symbol_primary, time_frame)
+            dados_pri = formatar_dados_brutos(dados_pri_bruto)
+
+            dados_sec_bruto = get_data_klines_sec(symbol_second, time_frame)
+            dados_sec = formatar_dados_brutos(dados_sec_bruto)
+        else:
+
+            dados_pri_bruto = client.get_klines(
+                symbol=symbol_primary,
+                interval=time_frame,
+                limit=1500,
+            )
+            dados_sec_bruto = client.get_klines(
+                symbol=symbol_second,
+                interval=time_frame,
+                limit=1500,
+            )
     except Exception as e:
         return jsonify({"erro": f"Falha ao obter dados da Binance: {str(e)}"}), 500
 
     # Formata os dados para extrair valores numéricos
-    dados_pri = formatar_dados_brutos(dados_btc_bruto)
-    dados_sec = formatar_dados_brutos(dados_eth_bruto)
+    dados_pri = formatar_dados_brutos(dados_pri_bruto)
+    dados_sec = formatar_dados_brutos(dados_sec_bruto)
 
     qtd_candles = min(len(dados_pri), len(dados_sec))
     movimentos = []
@@ -2284,7 +2431,7 @@ def filter_price_key():
     if not atr_suave:
         return jsonify({"erro": "ATR não pôde ser calculado."}), 400
 
-    if klines == "15m":
+    if time_frame == "15m":
         verify_time_multiply = 5
     else:
         verify_time_multiply = 4

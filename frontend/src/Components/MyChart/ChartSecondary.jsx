@@ -1,4 +1,4 @@
-import React, { useRef, useContext } from 'react';
+import React, { useRef, useContext, useEffect } from 'react';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import {
     Chart as ChartJS,
@@ -25,7 +25,7 @@ ChartJS.register(
 );
 
 const ChartBarSecondary = () => {
-    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec, symbolSec } = useContext(AppContext)
+    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec, symbolSec, simulationLabelDataSec, simulationValueDataSec, realTime, setRealTime, isPausedSec, setIsPausedSec } = useContext(AppContext)
     const chartRef = useRef();
 
     const handleZoomIn = () => {
@@ -40,19 +40,36 @@ const ChartBarSecondary = () => {
         if (chartRef.current) chartRef.current.resetZoom();
     };
 
-    const backgroundColor = valuesSecondary.map((valor, index) => {
+    const activeValue = simulationValueDataSec?.length > 0 ? simulationValueDataSec : valuesSecondary;
+    const activeLabel = simulationLabelDataSec?.length > 0 ? simulationLabelDataSec : labelsSecondary;
+
+
+    const backgroundColor = activeValue.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)';
-        return valor >= valuesSecondary[index - 1]
+        return valor >= activeValue[index - 1]
             ? 'rgba(0, 200, 0, 0.4)'
             : 'rgba(200, 0, 0, 0.4)';
     });
 
+    /* pega no localStore se e simulation ou real */
+    useEffect(() => {
+        const modoSalve = localStorage.getItem("realTimeMode");
+        if (modoSalve) {
+            setRealTime(modoSalve)
+        }
+    })
+    useEffect(() => {
+        if (realTime) {
+            localStorage.setItem("realTimeMode", realTime);
+        }
+    }, [realTime]);
+
     const data = {
-        labels: labelsSecondary,
+        labels: activeLabel,
         datasets: [
             {
                 label: 'Tendência',
-                data: valuesSecondary,
+                data: activeValue,
                 backgroundColor: backgroundColor,
                 borderRadius: 6,
             },
@@ -141,8 +158,8 @@ const ChartBarSecondary = () => {
             y: {
                 beginAtZero: false,
                 type: 'linear',
-                suggestedMin: Math.min(...valuesSecondary) * 0.98,
-                suggestedMax: Math.max(...valuesSecondary) * 1.02,
+                suggestedMin: Math.min(...activeValue) * 0.98,
+                suggestedMax: Math.max(...activeValue) * 1.02,
             },
         },
     };
@@ -173,6 +190,15 @@ const ChartBarSecondary = () => {
                     <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>
                     <button className='btn-zoom' onClick={handleZoomOut}>Zoom -</button>
                     <button className='btn-zoom' onClick={handleResetZoom}>Reset</button>
+
+                    {realTime === 'simulation' && (
+                        <button
+                            className='btn-zoom'
+                            onClick={() => setIsPausedSec(prev => !prev)}
+                        >
+                            {isPausedSec ? '▶️ Continuar' : '⏸️ Pausar'}
+                        </button>
+                    )}
                 </div>
             </div>
 

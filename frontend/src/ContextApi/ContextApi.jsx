@@ -37,17 +37,32 @@ const ContextApi = (props) => {
   const [realTime, setRealTime] = useState("");
   const [simulationLabelData, setSimulationLabelData] = useState([]);
   const [simulationValueData, setSimulationValueData] = useState([]);
+  const [simulationLabelDataSec, setSimulationLabelDataSec] = useState([]);
+  const [simulationValueDataSec, setSimulationValueDataSec] = useState([]);
+  const [simulationLabelDataKey, setSimulationLabelDataKey] = useState([]);
+  const [simulationValueDataKey, setSimulationValueDataKey] = useState([]);
   const simulationTimeoutRef = useRef(null);
   const [isPaused, setIsPaused] = useState(false);
   const isPausedRef = useRef(isPaused);
+  const modo = realTime;
+
+  const simulationSecTimeoutRef = useRef(null);
+  const [isPausedSec, setIsPausedSec] = useState(false);
+  const isPausedSecRef = useRef(isPausedSec);
+
+  const simulationTimeoutSyncRef = useRef(null);
+  const [isPausedKey, setIsPausedKey] = useState(false)
+  const isPausedKeyRef = useRef(isPausedKey);
 
 
-  let offset = 0;
-  const limit = 10;
+  let offsetRefPrimary = 0;
+  let offsetRefSecondary = 0;
+  let offsetRefKey = 0
+  const limitPrimary = 10;
+  const limitSecondary = 10;
+  const limitKey = 10;
 
 
-
-  console.log("💾 Modo salvo:", realTime);
 
   /*=========================================
             1️⃣ Busca o simbolo Primario
@@ -67,18 +82,127 @@ const ContextApi = (props) => {
     console.log("LoadGraphicDataOne chamado com modo:", realTime, "e símbolo:", symbolParam);
     if (realTime === "real") {
       await graphicDataOne(symbolParam);
-
     } else if (realTime === "simulation") {
-      await graphicDataOneSimulate(symbolParam);
+      await simulateStepSync(symbolParam);
     } else {
       console.warn("Modo inválido:", realTime);
     }
   };
 
 
-  const graphicDataOne = async (symbolParam) => {
-    console.log("Modo --:", realTime);
+  const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
+    // se não estiver em modo simulation, cancela
+    if (realTime !== 'simulation') {
+      console.log("🛑 Simulação cancelada: modo não é 'simulation'");
+      return;
+    }
 
+    // cancela timeout anterior (evita acumular)
+    clearTimeout(simulationTimeoutSyncRef.current);
+
+    try {
+      // helper para buscar 1 candle por endpoint/offset
+      const fetchOne = async (endpoint, offset) => {
+        const resp = await axios.get(`${endpoint}?offset=${offset}&limit=1`);
+        return (resp.data && resp.data.length) ? resp.data[0] : null;
+      };
+
+      // endpoints que você já usa
+      const epPrimary = `${url}/api/simulate_price_atr`;
+      const epSecondary = `${url}/api/simulate_price_atr_sec`;
+      const epKey = `${url}/api/simulate_price_atr_key`;
+
+      // checa pausa no primary antes de prosseguir
+      if (isPausedRef.current) {
+        console.log("⏸️ Simulação pausada (primary). Tentando novamente em 500ms...");
+        simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+        return;
+      }
+
+      // pega próximo candle do primary (driver)
+      let candleP = await fetchOne(epPrimary, offsetRefPrimary);
+      if (!candleP) {
+        console.log("✅ Simulação finalizada (primary terminou)");
+        return;
+      }
+
+      // data (somente parte data "YYYY-MM-DD" para sincronização por data)
+      let dateP = candleP.closeTime.split(' ')[0];
+
+      // registra o primary (use closeTime completo para label, para distinguir múltiplos)
+      setSimulationValueData(prev => [...prev, parseFloat(candleP.closePrice)]);
+      setSimulationLabelData(prev => [...prev, candleP.closeTime]);
+
+      // avança o offset do primary para o próximo passo
+      offsetRefPrimary += 1;
+
+      // agora, processa todos os secondary até <= dateP
+      while (true) {
+        if (isPausedSecRef.current) {
+          console.log("⏸️ Pausado durante processamento do secondary. Retomando depois...");
+          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+          return;
+        }
+
+        let candleS = await fetchOne(epSecondary, offsetRefSecondary);
+        if (!candleS) {
+          break;
+        }
+
+        let dateS = candleS.closeTime.split(' ')[0];
+        if (dateS > dateP) {
+          // próximo é depois, para sem avançar
+          break;
+        }
+
+        // registra o secondary
+        setSimulationValueDataSec(prev => [...prev, parseFloat(candleS.closePrice)]);
+        setSimulationLabelDataSec(prev => [...prev, candleS.closeTime]);
+
+        // avança para o próximo
+        offsetRefSecondary += 1;
+      }
+
+      // agora, processa todos os key até <= dateP
+      while (true) {
+        if (isPausedKeyRef.current) {
+          console.log("⏸️ Pausado durante processamento do key. Retomando depois...");
+          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+          return;
+        }
+
+        let candleK = await fetchOne(epKey, offsetRefKey);
+        if (!candleK) {
+          break;
+        }
+
+        let dateK = candleK.closeTime.split(' ')[0];
+        if (dateK > dateP) {
+          // próximo é depois, para sem avançar
+          break;
+        }
+
+        // registra o key
+        setSimulationValueDataKey(prev => [...prev, parseFloat(candleK.closePrice)]);
+        setSimulationLabelDataKey(prev => [...prev, candleK.closeTime]);
+
+        // avança para o próximo
+        offsetRefKey += 1;
+      }
+
+      // agenda próxima iteração (próximo primary + catch-up)
+      simulationTimeoutSyncRef.current = setTimeout(() => {
+        simulateStepSync(symbolPrimary, symbolSecondary);
+      }, 1000);
+
+    } catch (error) {
+      console.error("❌ Erro na simulateStepSync:", error);
+      clearTimeout(simulationTimeoutSyncRef.current);
+    }
+  };
+
+
+  const graphicDataOne = async (symbolParam) => {
     // 🧹 Limpa dados da simulação
     clearTimeout(simulationTimeoutRef.current);
     setSimulationValueData([]);
@@ -101,59 +225,7 @@ const ContextApi = (props) => {
   };
 
 
-  const graphicDataOneSimulate = async (symbolParam) => {
-    if (realTime !== 'simulation') {
-      console.log("❌ Ignorando graphicDataOneSimulate: modo não é simulação, modo atual:", realTime);
-      return;
-    }
-    try {
-      const modo = realTime;
 
-      await axios.get(`${url}/api/update_klines?symbol=${symbolParam}&modo=${modo}`);
-      const response = await axios.get(`${url}/api/simulate_price_atr?offset=${offset}&limit=${limit}`);
-      const data = response.data;
-
-      if (data.length === 0) {
-        console.log("✅ Simulação finalizada");
-        return;
-      }
-
-      const exibirDados = (index) => {
-        if (realTime !== 'simulation') {
-          console.log("🛑 Modo mudou durante a simulação, encerrando...");
-          return;
-        }
-
-        if (index >= data.length) {
-          offset += limit;
-          simulationTimeoutRef.current = setTimeout(() => {
-            graphicDataOneSimulate(symbolParam);
-          }, 100);
-          return;
-        }
-
-        const candle = data[index];
-
-        if (!isPausedRef.current) {
-          console.log("🕒 Simulando:", candle.closeTime, candle.closePrice);
-          setSimulationValueData(prev => [...prev, parseFloat(candle.closePrice)]);
-          setSimulationLabelData(prev => [...prev, candle.closeTime.split(' ')[0]]);
-
-          simulationTimeoutRef.current = setTimeout(() => exibirDados(index + 1), 100);
-        } else {
-          // Pausado: tenta de novo o mesmo index após delay
-          console.log("⏸️ Pausado...");
-          simulationTimeoutRef.current = setTimeout(() => exibirDados(index), 100);
-        }
-
-      };
-
-      exibirDados(0);
-    } catch (error) {
-      console.error("❌ Erro ao buscar dados de simulação:", error);
-      clearTimeout(simulationTimeoutRef.current);
-    }
-  };
 
   // faz pequisa do simbolo envia para backend
   const handleSearch = async (event) => {
@@ -216,13 +288,17 @@ const ContextApi = (props) => {
 
   const graphicDataSecondary = async (symbolSecParam) => {
     if (!symbolSecParam) return;
+
+    // 🧹 Limpa dados da simulação
+    clearTimeout(simulationSecTimeoutRef.current);
+    setSimulationValueDataSec([]);
+    setSimulationLabelDataSec([]);
     try {
       const response = await axios.get(`${url}/api/filter_price_atr_second?symbol=${symbolSecParam}`);
       const data = response.data;
 
       const prices = data.map(p => parseFloat(p.closePrice));
       const time = data.map(p => {
-        // p.closeTime está como "27/05/2025 13:00:00"
         return p.closeTime.split(' ')[0]; // Vai pegar só "27/05/2025"
       });
 
@@ -234,6 +310,7 @@ const ContextApi = (props) => {
       console.error("Erro na API para recuperar símbolos:", error);
     }
   }
+
 
   const handleSearchSec = async (event) => {
     event?.preventDefault();
@@ -500,9 +577,25 @@ const ContextApi = (props) => {
   useEffect(() => {
     if (realTime === "real") {
       clearTimeout(simulationTimeoutRef.current);
+      offsetRefPrimary = 0;
+      offsetRefSecondary = 0;
+      offsetRefKey = 0;
       setSimulationValueData([]);
       setSimulationLabelData([]);
-      offset = 0; // reinicia para caso volte pra simulação depois
+      setSimulationValueDataSec([]);
+      setSimulationLabelDataSec([]);
+      setSimulationValueDataKey([]);
+      setSimulationLabelDataKey([]);
+
+    }
+  }, [realTime]);
+
+  useEffect(() => {
+    if (realTime === "real") {
+      clearTimeout(simulationSecTimeoutRef.current);
+      setSimulationLabelDataSec([]);
+      setSimulationValueDataSec([]);
+      offsetRefSecondary = 0; // reinicia para caso volte pra simulação depois
     }
   }, [realTime]);
 
@@ -510,6 +603,9 @@ const ContextApi = (props) => {
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
+  useEffect(() => {
+    isPausedSecRef.current = isPausedSec
+  }, [isPausedSec]);
 
 
 
@@ -521,7 +617,7 @@ const ContextApi = (props) => {
 
         if (savedSymbol || savedSymbolSec) {
           await Promise.all([
-            LoadGraphicDataOne(savedSymbol),
+            LoadGraphicDataOne(savedSymbol, savedSymbolSec),
             graphicDataSecondary(savedSymbolSec),
             graphicDataKey(),
             handleGetTime(),
@@ -538,7 +634,27 @@ const ContextApi = (props) => {
 
     loadData();
 
-    const interval = setInterval(async () => {
+    /* Executa a cada uma hora */
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    const ms = now.getMilliseconds();
+
+    // Quanto tempo falta até a próxima hora cheia
+    const delay = ((61 - minutes) * 60 * 1000) - (seconds * 1000) - ms;
+    console.log(`⏳ Atualização programada para daqui a ${Math.round(delay / 1000)} segundos`);
+
+    setTimeout(() => {
+      // Atualiza na hora cheia
+      updateAllData();
+
+      // Depois executa a cada 60 minutos
+      setInterval(() => {
+        updateAllData();
+      }, 61 * 60 * 1000);
+    }, delay);
+
+    async function updateAllData() {
       try {
         await Promise.all([
           graphicDataSecondary(symbolSec),
@@ -546,13 +662,13 @@ const ContextApi = (props) => {
           handleGetPoints(),
           handleGetPointsKey(),
         ]);
+        console.log("✅ Dados atualizados em", new Date().toLocaleTimeString());
       } catch (error) {
-        console.error("Erro ao atualizar dados no intervalo:", error);
+        console.error("Erro ao atualizar dados:", error);
       }
-    }, 60000);
-
-    return () => clearInterval(interval);
-  }, [symbol, symbolSec, realTime]); // Adicione realTime como dependência
+    }
+    ;
+  }, [symbol, symbolSec, realTime]);
 
 
   const contextValue = {
@@ -590,7 +706,13 @@ const ContextApi = (props) => {
     simulationValueData,
     isPaused,
     setIsPaused,
-    isPausedRef
+    isPausedRef,
+    simulationLabelDataSec,
+    simulationValueDataSec,
+    isPausedSec,
+    setIsPausedSec,
+    simulationLabelDataKey,
+    simulationValueDataKey
   };
 
   return (
