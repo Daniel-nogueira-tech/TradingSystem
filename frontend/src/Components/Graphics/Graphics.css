@@ -145,15 +145,6 @@ th {
   background-color: var(--background);
 }
 
-.slider-container {
-  display: flex;
-}
-
-.slider-container label {
-  align-items: center;
-  font-size: 13px;
-}
-
 .custom-slider {
   border-radius: 8px;
   -webkit-appearance: none;
@@ -238,9 +229,6 @@ th {
   border-color: #7e50aa;
   font-weight: bold;
 }
-
-
-
 
 
 @media (max-width:1900px) {

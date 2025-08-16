@@ -49,6 +49,7 @@ const SiderBarRight = () => {
                 <option value="simulation">Simulação</option>
                 <option value="real">Real time</option>
             </select>
+            
 
             <label>Quantidade:</label>
             <input

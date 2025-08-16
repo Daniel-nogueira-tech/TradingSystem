@@ -38,6 +38,8 @@ from db import (
     clear_table_trend_clarifications_sec,
     save_trend_clarifications_sec,
     get_trend_clarifications_key,
+    get_date_simulation,
+    get_date_simulation_sec,
 )
 
 
@@ -64,7 +66,9 @@ init_db()
 init_db_sec()
 
 
+# --------------------------------------------------------
 # Função para formatar os dados brutos da API da Binance
+# --------------------------------------------------------
 def formatar_dados_brutos(dados_brutos):
     dados_formatados = []
 
@@ -82,7 +86,9 @@ def formatar_dados_brutos(dados_brutos):
     return dados_formatados
 
 
-# Função para calcular ATR
+# --------------------------------
+# Função para calcular ATR Inicio
+# --------------------------------
 def calcular_atr_movel(dados, periodo=14):
     if len(dados) < periodo + 1:
         print("Poucos dados para calcular ATR móvel.")
@@ -100,10 +106,7 @@ def calcular_atr_movel(dados, periodo=14):
             true_ranges.append(tr)
 
         atr = sum(true_ranges) / periodo
-        atrs.append(
-            {"index": i, "Tempo": dados[i]["Tempo"], "ATR": atr}  # <--- IMPORTANTE
-        )
-
+        atrs.append({"index": i, "Tempo": dados[i]["Tempo"], "ATR": atr})
     return atrs
 
 
@@ -112,7 +115,6 @@ def suavizar_atr(atrs, periodo=180):
         return []
 
     atr_suavizado = []
-
     for i in range(periodo - 1, len(atrs)):
         soma = sum([atrs[j]["ATR"] for j in range(i - periodo + 1, i + 1)])
         media = soma / periodo
@@ -120,7 +122,17 @@ def suavizar_atr(atrs, periodo=180):
     return atr_suavizado
 
 
+# --------------------------------
+# Função para calcular ATR Fim
+# --------------------------------
+
+
+# ==========================================================================
+#                      Inicio ativo primário
+# ==========================================================================
+# ----------------------------------------
 # 🔍 1️⃣ Consultar o último símbolo salvo
+# ----------------------------------------
 @app.route("/api/last_symbol", methods=["GET"])
 def get_last_symbol():
     symbol = symbolo_saved()
@@ -130,10 +142,11 @@ def get_last_symbol():
         return jsonify({"message": "Nenhum símbolo salvo"}), 404
 
 
+# --------------------------------------------------------
 # 1️⃣ Endpoint para mudar tempo grafico (em todos graficos)
+# --------------------------------------------------------
 @app.route("/api/timeframe", methods=["GET", "POST"])
 def filter_time():
-
     if request.method == "POST":
         data = request.get_json() or request.form
         time = data.get("time", "").strip()
@@ -150,58 +163,112 @@ def filter_time():
         return jsonify({"time": time}), 200
 
 
-# 1️⃣  funcao para atualizar o klines salvos para simular primeiro ativo
+# ----------------------------------------------------------------------
+# 1️⃣ Função para atualizar o klines salvos para simular primeiro ativo
+# ----------------------------------------------------------------------
 @app.route("/api/update_klines", methods=["GET", "POST"])
 def update_klines():
-    symbol = request.args.get("symbol", "").strip().upper()
+    symbol = str(request.args.get("symbol", "")).strip().upper()
+    date_start = request.args.get("date_start", "").strip()
+    date_end = request.args.get("date_end", "").strip()
+    days = request.args.get("days", "").strip()
+
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
 
-    salve_or_replace(symbol)  # salva no banco o símbolo atual
+    days = int(days) if days.isdigit() else None
+
+    salve_or_replace(symbol)
     timeFrame = get_timeframe_global().lower()
 
     try:
-        download_and_save_klines(symbol, intervalo=timeFrame, dias=90)
+        download_and_save_klines(
+            symbol,
+            intervalo=timeFrame,
+            date_start=date_start,
+            date_end=date_end,
+            days=days,
+        )
         return jsonify({"mensagem": f"Dados de {symbol} atualizados com sucesso!"})
     except Exception as e:
         print(f"❌ Erro ao baixar/salvar klines: {str(e)}")
         return jsonify({"erro": str(e)}), 500
 
 
-# =============================================
-# 📊1️⃣  Guarda no banco de dados dados do ativo
-# ############################################
-def download_and_save_klines(symbol, intervalo, dias=90, clean_before=True):
+# --------------------------------------------------
+# 📊 1️⃣  Guarda no banco de dados do ativo primario
+# --------------------------------------------------
+def download_and_save_klines(
+    symbol, intervalo, date_start=None, date_end=None, days=None, clean_before=True
+):
     if clean_before:
-        Delete_all_Klines(symbol, intervalo)
+        Delete_all_Klines()
 
-    start_ms = int(
-        (datetime.now(timezone.utc) - timedelta(days=dias)).timestamp() * 1000
-    )
+    # Definir período
+    if date_start and date_end:
+        start_ms = int(
+            datetime.strptime(date_start, "%Y-%m-%d")
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+            * 1000
+        )
+        end_ms = int(
+            datetime.strptime(date_end, "%Y-%m-%d")
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+            * 1000
+        )
+    elif days:
+        start_ms = int(
+            (datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000
+        )
+        end_ms = None
+    else:
+        raise ValueError("Você deve passar dias ou date_start/date_end")
 
+    # Baixar candles
     all_klines = []
     while True:
-        batch = client.get_klines(
-            symbol=symbol, interval=intervalo, startTime=start_ms, limit=1500
-        )
+        params = {
+            "symbol": symbol,
+            "interval": intervalo,
+            "startTime": start_ms,
+            "limit": 1500,
+        }
+        if date_end:
+            params["endTime"] = end_ms
+
+        batch = client.get_klines(**params)
         if not batch:
             break
+
         all_klines.extend(batch)
+
+        if date_end and batch[-1][0] >= end_ms:
+            break
+
         start_ms = batch[-1][0] + 1
         time.sleep(0.3)
 
+    # Salvar
     klines_formatados = [tuple(k[:11]) for k in all_klines]
-
     conn = conectar()
     save_klines(
-        conn, symbol, intervalo, klines_formatados
-    )  # agora vai com o valor correto
+        conn,
+        symbol,
+        intervalo,
+        klines_formatados,
+        days=days,
+        days_start=date_start,
+        days_end=date_end,
+    )
     conn.close()
 
 
-# =========================================================
-# 📊 1️⃣ pega no banco de dados dados do ativo para simulacao primario
-# #########################################################
+# ============================SIMULAR inicio============================
+# ----------------------------------------------------------------
+# 📊 1️⃣ Pega no banco de dados do ativo para simulação primário.
+# ----------------------------------------------------------------
 @app.route("/api/simulate_price_atr", methods=["GET"])
 def simulate_price_atr():
     offset = int(request.args.get("offset", 0))
@@ -222,11 +289,37 @@ def simulate_price_atr():
         }
         for m in movimentos_fatiados
     ]
-
     return jsonify(dados)
 
 
-# 🔍 2️⃣Consultar o último símbolo salvo do ativo secundario
+# -------------------------------------------
+# 📊 1️⃣  Pega as datas ou dias da simulação.
+# -------------------------------------------
+@app.route("/api/get_date/simulation", methods=["GET"])
+def get_date_simalation():
+    date_simulation = get_date_simulation()
+    if date_simulation:
+        days, days_start, days_end = date_simulation
+        return (
+            jsonify({"days": days, "days_start": days_start, "days_end": days_end}),
+            200,
+        )
+    else:
+        return jsonify({"message": "Nenhum símbolo salvo"}), 404
+
+
+# ===============================SIMULAR FIM================================
+# ==========================================================================
+#                          Fim ativo primário
+# ==========================================================================
+
+
+# ==========================================================================
+#                          Inicio ativo secundário
+# ==========================================================================
+# ------------------------------------------------------------
+# 🔍 2️⃣ Consultar o último símbolo salvo do ativo secundário
+# ------------------------------------------------------------
 @app.route("/api/last_symbol_second", methods=["GET"])
 def get_last_symbol_sec():
     symbol = symbolo_saved_sec()
@@ -236,56 +329,112 @@ def get_last_symbol_sec():
         return jsonify({"message": "Nenhum símbolo salvo"}), 404
 
 
-# 2️⃣ funcao para atualizar o klines salvos para simular segundo ativo
+# --------------------------------------------------------------------
+# 2️⃣ Função para atualizar os klines salvos para simular segundo ativo.
+# --------------------------------------------------------------------
 @app.route("/api/update_klines_sec", methods=["GET", "POST"])
 def update_klines_sec():
     symbol = request.args.get("symbol", "").strip().upper()
+    date_start = request.args.get("date_start", "").strip()
+    date_end = request.args.get("date_end", "").strip()
+    days = request.args.get("days", "").strip()
+
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
+
+    days = int(days) if days.isdigit() else None
 
     salve_or_replace_sec(symbol)  # salva no banco o símbolo atual
     timeFrame = get_timeframe_global().lower()
 
     try:
-        download_and_save_klines_sec(symbol, intervalo=timeFrame, dias=90)
+        download_and_save_klines_sec(
+            symbol,
+            intervalo=timeFrame,
+            date_start=date_start,
+            date_end=date_end,
+            days=days,
+        )
         return jsonify({"mensagem": f"Dados de {symbol} atualizados com sucesso!"})
     except Exception as e:
         print(f"❌ Erro ao baixar/salvar klines: {str(e)}")
         return jsonify({"erro": str(e)}), 500
 
 
-# ==================================================--
-# 📊2️⃣  Guarda no banco de dados dados do ativo sec
-# ##################################################
-def download_and_save_klines_sec(symbol, intervalo, dias=90, clean_before=True):
+# ----------------------------------------------------------
+# 📊2️⃣  Guarda no banco de dados dados do ativo secundário
+# -----------------------------------------------------------
+def download_and_save_klines_sec(
+    symbol, intervalo, date_start=None, date_end=None, days=None, clean_before=True
+):
     if clean_before:
-        Delete_all_Klines_sec(symbol, intervalo)
+        Delete_all_Klines_sec()
 
-    start_ms = int(
-        (datetime.now(timezone.utc) - timedelta(days=dias)).timestamp() * 1000
-    )
+    # Definir período
+    if date_start and date_end:
+        start_ms = int(
+            datetime.strptime(date_start, "%Y-%m-%d")
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+            * 1000
+        )
+        end_ms = int(
+            datetime.strptime(date_end, "%Y-%m-%d")
+            .replace(tzinfo=timezone.utc)
+            .timestamp()
+            * 1000
+        )
+    elif days:
+        start_ms = int(
+            (datetime.now(timezone.utc) - timedelta(days=days)).timestamp() * 1000
+        )
+        end_ms = None
+    else:
+        raise ValueError("Você deve passar dias ou date_start/date_end")
 
+    # Baixar candles
     all_klines = []
     while True:
-        batch = client.get_klines(
-            symbol=symbol, interval=intervalo, startTime=start_ms, limit=1500
-        )
+        params = {
+            "symbol": symbol,
+            "interval": intervalo,
+            "startTime": start_ms,
+            "limit": 1500,
+        }
+        if date_end:
+            params["endTime"] = end_ms
+
+        batch = client.get_klines(**params)
         if not batch:
             break
+
         all_klines.extend(batch)
+
+        if date_end and batch[-1][0] >= end_ms:
+            break
+
         start_ms = batch[-1][0] + 1
         time.sleep(0.3)
 
+    # Salvar
     klines_formatados = [tuple(k[:11]) for k in all_klines]
-
     conn = conectar()
-    save_klines_sec(conn, symbol, intervalo, klines_formatados)  # salva os dados
+    save_klines_sec(
+        conn,
+        symbol,
+        intervalo,
+        klines_formatados,
+        days=days,
+        days_start=date_start,
+        days_end=date_end,
+    )
     conn.close()
 
 
-# =========================================================
-# 📊 2️⃣ pega no banco de dados dados do ativo para simulacao secundaria
-# #########################################################
+# ===============================SIMULAR inicio================================
+# -----------------------------------------------------------------------------
+# 📊 2️⃣ pega no banco de dados dados do ativo para simular o ativo secundário
+# -----------------------------------------------------------------------------
 @app.route("/api/simulate_price_atr_sec", methods=["GET"])
 def simulate_price_atr_sec():
     offset = int(request.args.get("offset", 0))
@@ -310,9 +459,36 @@ def simulate_price_atr_sec():
     return jsonify(dados)
 
 
-# =================================================================
-# 📊 3 pega no banco de dados dados do ativo para simulacao chave
-# #################################################################
+# -------------------------------------------
+# 📊 2️⃣  Pega as datas ou dias da simulação.
+# -------------------------------------------
+@app.route("/api/get_date/simulation_sec", methods=["GET"])
+def get_date_simalation_sec():
+    date_simulation = get_date_simulation_sec()
+    if date_simulation:
+        days, days_start, days_end = date_simulation
+        return (
+            jsonify({"days": days, "days_start": days_start, "days_end": days_end}),
+            200,
+        )
+    else:
+        return jsonify({"message": "Nenhum símbolo salvo"}), 404
+
+
+# ===============================SIMULAR FIM================================
+
+
+# ==========================================================================
+#                          Fim ativo secundário
+# ==========================================================================
+
+
+# ==========================================================================
+#                          Inicio ativo Chave
+# ==========================================================================
+# --------------------------------------------------------------------
+# 📊 3 pega no banco de dados dados do ativo para simular ativo chave
+# --------------------------------------------------------------------
 @app.route("/api/simulate_price_atr_key", methods=["GET"])
 def simulate_price_atr_key():
     offset = int(request.args.get("offset", 0))
@@ -337,7 +513,12 @@ def simulate_price_atr_key():
     return jsonify(dados)
 
 
-# 1️⃣ Endpoint primario
+# ==========================================================================
+#                          Inicie a classificação
+# ==========================================================================
+# ------------------------------
+# 1️⃣ Endpoint do ativo Primeiro
+# ------------------------------
 @app.route("/api/filter_price_atr", methods=["GET", "POST"])
 def filter_price_atr():
     symbol = request.args.get("symbol", "").strip().upper()
@@ -1332,7 +1513,9 @@ def filter_price_atr():
     return jsonify(movimentos)
 
 
-# 2️⃣ End Pont para pegar dados secundarios
+# -----------------------------------------------------
+# 2️⃣ Endpoint para pegar dados secundários da binance.
+# -----------------------------------------------------
 @app.route("/api/filter_price_atr_second", methods=["GET", "POST"])
 def filter_price_atr_second():
     symbol = request.args.get("symbol").strip().upper()
@@ -2322,6 +2505,9 @@ def filter_price_atr_second():
     return jsonify(movimentos)
 
 
+# ------------------------------------------------
+# 2️⃣ Endpoint para pegar dados chaves da binance.
+# ------------------------------------------------
 @app.route("/api/filter_price_key", methods=["GET", "POST"])
 def filter_price_key():
     modo = request.args.get("modo", "").strip().lower()
@@ -3394,21 +3580,26 @@ def filter_price_key():
     return jsonify(movimentos)
 
 
-# ==============================================
-# funcao para retornar os pontos importantes
-# ##############################################
+# ==========================================================================
+#                          Fim da classificação
+# ==========================================================================
+
+
+# -----------------------------------------------
+# Função para retornar os pontos importantes.
+# -----------------------------------------------
 @app.route("/api/trend_clarifications", methods=["GET"])
-def trend_clarifications():
+def pivot_points():
     if request.method == "GET":
         points = important_points()
         return jsonify(points)
 
 
-# ==================================================
-# funcao para retornar os pontos importantes chaves
-# ##################################################
+# --------------------------------------------------
+# Função para retornar os pontos importantes chaves.
+# --------------------------------------------------
 @app.route("/api/trend_clarifications_key", methods=["GET"])
-def trend_clarifications_key():
+def pivot_points_key():
     if request.method == "GET":
         points = important_points_key()
         return jsonify(points)

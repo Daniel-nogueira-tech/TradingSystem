@@ -104,7 +104,8 @@ const Home = () => {
             <div className='container-home '>
                 <div className='button-date-container'>
                     <div className='button-dt'>
-                        <button className='button-date' onClick={onChangeHandlerDate}>Data inicio</button>
+                        <button className='button-date' 
+                        onClick={onChangeHandlerDate}>Data inicio</button>
                         {selectedDateStart && <p className='date'>De: <strong>{selectedDateStart}</strong></p>}
                     </div>
 

@@ -4,10 +4,24 @@ import Chart from '../MyChart/Chart '
 import ChartSecondary from '../MyChart/ChartSecondary'
 import ChartBarKey from '../MyChart/ChartBarKey'
 import { AppContext } from '../../ContextApi/ContextApi';
+import Swal from 'sweetalert2'
 
 const Graphics = () => {
-  const [value, setValue] = useState(500);
-  const { dadosPrice, dadosPriceSecondary, dadosPriceKey, activeButton, handleClickTime, importantPoints, importantPointsKey, togglePivot, togglePivotKey, selectedPivotsKeys, setRealTime } = useContext(AppContext);
+  const { dadosPrice,
+    dadosPriceSecondary,
+    dadosPriceKey,
+    activeButton,
+    handleClickTime,
+    importantPoints,
+    importantPointsKey,
+    togglePivot,
+    togglePivotKey,
+    setRealTime,
+    simulationValueDataComplete,
+    simulationValueDataCompleteSec,
+    simulationValueDataCompleteKey,
+
+  } = useContext(AppContext);
   const dadosTables = dadosPrice.reverse();
   const dadosTablesSec = dadosPriceSecondary.reverse();
   const dadosTablesKey = dadosPriceKey.reverse();
@@ -15,11 +29,15 @@ const Graphics = () => {
   const [currentPage_2, setCurrentPage_2] = useState(1);
   const [currentPageKey, setCurrentPageKey] = useState(1);
   const [views, setViews] = useState('primario');
+
   const itemsPerPage = 20;
   const itemsPerPage_2 = 20;
   const itemsPerPageKey = 20;
 
 
+  const activeTable = simulationValueDataComplete?.length > 0 ? simulationValueDataComplete : dadosTables;
+  const activeTableSec = simulationValueDataCompleteSec?.length > 0 ? simulationValueDataCompleteSec : dadosTablesSec;
+  const activeTableKey = simulationValueDataCompleteKey?.length > 0 ? simulationValueDataCompleteKey : dadosTablesKey;
 
 
   const movimentos = [
@@ -71,7 +89,7 @@ const Graphics = () => {
 
   // Transforma os dados diretamente em linhas da tabela
   const linhas = useMemo(() => {
-    return dadosTables.map(item => {
+    return activeTable.map(item => {
       const dataHora = new Date(item.closeTime).toLocaleString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -91,12 +109,12 @@ const Graphics = () => {
 
       return linha;
     });
-  }, [dadosPrice]);
+  }, [activeTable]);
 
 
   // Transforma os dados diretamente em linhas da tabela secundaria
   const linhas_2 = useMemo(() => {
-    return dadosTablesSec.map(item => {
+    return activeTableSec.map(item => {
       const dataHora = new Date(item.closeTime).toLocaleString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -116,11 +134,11 @@ const Graphics = () => {
 
       return linha_2;
     });
-  }, [dadosPriceSecondary]);
+  }, [activeTableSec]);
 
   // Transforma os dados diretamente em linhas da tabela Chave
   const linhasKey = useMemo(() => {
-    return dadosTablesKey.map(item => {
+    return activeTableKey.map(item => {
       const dataHora = new Date(item.closeTime).toLocaleString('pt-BR', {
         day: '2-digit',
         month: '2-digit',
@@ -140,7 +158,8 @@ const Graphics = () => {
 
       return linhaKey;
     });
-  }, [dadosPriceKey]);
+  }, [activeTableKey]);
+
 
 
   // Paginação
@@ -163,6 +182,8 @@ const Graphics = () => {
     const end = start + itemsPerPageKey;
     return linhasKey.slice(start, end);
   }, [linhasKey, currentPageKey])
+
+
 
 
   return (
@@ -193,7 +214,7 @@ const Graphics = () => {
           >1D</button>
 
           <button
-            className={`button-time ${activeButton === '1d' ? 'active' : ''}`}
+            className="button-time"
             onClick={() => {
               setRealTime('real');
               window.location.reload();
@@ -201,20 +222,6 @@ const Graphics = () => {
           >
             🔄 Atualizar
           </button>
-
-
-        </div>
-
-        <div className="slider-container">
-          <label>Barras: {value}</label>
-          <input
-            type="range"
-            min="500"
-            max="5000"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="custom-slider"
-          />
         </div>
 
       </div>

@@ -12,6 +12,7 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2'; // 👈 agora usamos Bar aqui
 import { AppContext } from '../../ContextApi/ContextApi';
+import Swal from 'sweetalert2';
 
 ChartJS.register(
     BarElement,
@@ -25,7 +26,29 @@ ChartJS.register(
 );
 
 const ChartBarSecondary = () => {
-    const { valuesSecondary, labelsSecondary, handleSearchSec, inputRefSec, symbolSec, simulationLabelDataSec, simulationValueDataSec, realTime, setRealTime, isPausedSec, setIsPausedSec } = useContext(AppContext)
+    const {
+        valuesSecondary,
+        labelsSecondary,
+        handleSearchSec,
+        inputRefSec,
+        symbolSec,
+        simulationLabelDataSec,
+        simulationValueDataSec,
+        realTime,
+        setRealTime,
+        isPausedSec,
+        setIsPausedSec,
+        showDaysInputSec,
+        daysSec,
+        daysValueSec,
+        dateSimulationStartSec,
+        dateSimulationEndSec,
+        setDateSimulationEndSec,
+        setDateSimulationStartSec,
+        setDaysValueSec,
+        dateSimulationSec,
+        setShowDaysInputSec
+    } = useContext(AppContext)
     const chartRef = useRef();
 
     const handleZoomIn = () => {
@@ -63,6 +86,101 @@ const ChartBarSecondary = () => {
             localStorage.setItem("realTimeMode", realTime);
         }
     }, [realTime]);
+
+
+    /* simular trade  (pega a data do back teste)*/
+    const onChangeHandlerDateSimulationStart = async () => {
+        const { value: date } = await Swal.fire({
+            title: "Selecione a data",
+            input: "date",
+            inputLabel: "Escolha uma data",
+            inputPlaceholder: "Data",
+            inputAttributes: {
+                required: true,
+            },
+            customClass: {
+                popup: 'fundo-preto',
+                title: 'titulo-branco',
+                inputLabel: 'label-branca',
+                confirmButton: 'botao-verde',
+                validationMessage: 'erro-custom'
+            },
+            didOpen: () => {
+                const today = new Date().toISOString().split("T")[0];
+                Swal.getInput().max = today;
+            },
+            preConfirm: (date) => {
+                if (!date) {
+                    Swal.showValidationMessage("Você precisa escolher uma data!");
+                }
+            }
+        });
+        if (date) {
+            setDateSimulationStartSec(date);
+            setDaysValueSec('')
+
+            Swal.fire({
+                title: 'Data selecionada:',
+                text: date,
+                customClass: {
+                    popup: 'fundo-preto',
+                    title: 'titulo-branco',
+                    content: 'texto-branco',
+                    confirmButton: 'botao-verde',
+                }
+            });
+            // Aqui você pode disparar um fetch ou filtro com a data selecionada
+            // Exemplo: fetchDataByDate(date);
+
+        }
+    };
+    /*simular trade (pega a data do back teste)*/
+    const onChangeHandlerDateSimulationEnd = async () => {
+        const { value: date } = await Swal.fire({
+            title: "Selecione a data",
+            input: "date",
+            inputLabel: "Escolha uma data",
+            inputPlaceholder: "Data",
+            inputAttributes: {
+                required: true,
+            },
+            customClass: {
+                popup: 'fundo-preto',
+                title: 'titulo-branco',
+                inputLabel: 'label-branca',
+                confirmButton: 'botao-verde',
+                validationMessage: 'erro-custom'
+            },
+            didOpen: () => {
+                const today = new Date().toISOString().split("T")[0];
+                Swal.getInput().max = today;
+            },
+            preConfirm: (date) => {
+                if (!date) {
+                    Swal.showValidationMessage("Você precisa escolher uma data!");
+                }
+            }
+        });
+        if (date) {
+            setDateSimulationEndSec(date);
+            setDaysValueSec('')
+
+            Swal.fire({
+                title: 'Data selecionada:',
+                text: date,
+                customClass: {
+                    popup: 'fundo-preto',
+                    title: 'titulo-branco',
+                    content: 'texto-branco',
+                    confirmButton: 'botao-verde',
+                }
+            });
+
+            // Aqui você pode disparar um fetch ou filtro com a data selecionada
+            // Exemplo: fetchDataByDate(date);
+
+        }
+    };
 
     const data = {
         labels: activeLabel,
@@ -201,6 +319,51 @@ const ChartBarSecondary = () => {
                     )}
                 </div>
             </div>
+
+            {realTime === "simulation" && (
+                <div className='dateSimulation'>
+
+                    {!showDaysInputSec && (
+                        <>
+                            <button onClick={onChangeHandlerDateSimulationStart}>
+                                De : {dateSimulationStartSec}
+                            </button>
+
+                            <button onClick={onChangeHandlerDateSimulationEnd}>
+                                Até : {dateSimulationEndSec}
+                            </button>
+                        </>
+                    )}
+
+                    {!showDaysInputSec ? (
+                        <button onClick={() => setShowDaysInputSec(true)}>
+                            Dias :{daysSec}
+                        </button>
+                    ) : (
+                        <div>
+                            <span>Dias : </span>
+                            <input
+                                type="text"
+                                placeholder="Digite a quantidade de dias"
+                                value={daysValueSec}
+                                onChange={(e) => {
+                                    setDaysValueSec(e.target.value)
+                                    setDateSimulationStartSec('');
+                                    setDateSimulationEndSec('');
+                                }}
+                            />
+                            <button onClick={() => setShowDaysInputSec(false)}>
+                                OK
+                            </button>
+                        </div>
+                    )}
+
+                    {(daysValueSec || (dateSimulationStartSec && dateSimulationEndSec)) && (
+                        <button onClick={dateSimulationSec}>Atualizar Dados</button>
+                    )}
+
+                </div>
+            )}
 
             <Bar
                 ref={chartRef}

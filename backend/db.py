@@ -534,6 +534,9 @@ def init_db():
         """
         CREATE TABLE IF NOT EXISTS klines (
             symbol TEXT,
+            days INTEGER,
+            days_start TEXT,
+            days_end TEXT,
             intervalo TEXT,
             open_time INTEGER,
             open REAL,
@@ -555,19 +558,30 @@ def init_db():
 
 
 # insere os klines no banco
-def save_klines(conn, symbol, intervalo, klines):
+def save_klines(
+    conn, symbol, intervalo, klines, days=None, days_start=None, days_end=None
+):
     cursor = conn.cursor()
 
-    dados_completos = [(symbol, intervalo, *k) for k in klines]
+    if days is not None:
+        days_start = None
+        days_end = None
+    else:
+        days = None
+
+    dados_completos = [
+        (symbol, days, days_start, days_end, intervalo, *k) for k in klines
+    ]
 
     cursor.executemany(
         """
         INSERT OR REPLACE INTO klines (
-            symbol, intervalo, open_time, open, high, low, close, volume,
+            symbol, days, days_start, days_end, intervalo,
+            open_time, open, high, low, close, volume,
             close_time, quote_asset_volume, number_of_trades,
             taker_buy_base_asset_volume, taker_buy_quote_asset_volume
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         dados_completos,
     )
@@ -575,17 +589,18 @@ def save_klines(conn, symbol, intervalo, klines):
 
 
 # deleta os dados
-def Delete_all_Klines(symbol, intervalo):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        DELETE FROM klines WHERE symbol = ? AND intervalo = ?
-        """,
-        (symbol, intervalo),
-    )
-    conn.commit()
-    conn.close()
+def Delete_all_Klines():
+    print("🗑️ Deletando todos os registros da tabela klines...")
+    try:
+        conn = conectar()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM klines")
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Erro ao deletar klines: {e}")
+        raise
+    finally:
+        conn.close()
 
 
 # pega os dados do banco para classificação
@@ -606,6 +621,22 @@ def get_data_klines(symbol, intervalo):
     return resultados
 
 
+def get_date_simulation():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT days, days_start, days_end
+        FROM klines 
+        ORDER BY open_time DESC
+        LIMIT 1
+        """
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result
+
+
 # ============================================================
 # salva dados da binance no banco para simular ativo sec
 ##############################################################
@@ -617,6 +648,9 @@ def init_db_sec():
         """
         CREATE TABLE IF NOT EXISTS klines_sec (
             symbol TEXT,
+            days INTEGER,
+            days_start TEXT,
+            days_end TEXT,
             intervalo TEXT,
             open_time INTEGER,
             open REAL,
@@ -638,19 +672,30 @@ def init_db_sec():
 
 
 # insere os klines no banco
-def save_klines_sec(conn, symbol, intervalo, klines):
+def save_klines_sec(
+    conn, symbol, intervalo, klines, days=None, days_start=None, days_end=None
+):
     cursor = conn.cursor()
 
-    dados_completos = [(symbol, intervalo, *k) for k in klines]
+    if days is not None:
+        days_start = None
+        days_end = None
+    else:
+        days = None
+
+    dados_completos = [
+        (symbol, days, days_start, days_end, intervalo, *k) for k in klines
+    ]
 
     cursor.executemany(
         """
         INSERT OR REPLACE INTO klines_sec (
-            symbol, intervalo, open_time, open, high, low, close, volume,
+            symbol, days, days_start, days_end, intervalo,
+            open_time, open, high, low, close, volume,
             close_time, quote_asset_volume, number_of_trades,
             taker_buy_base_asset_volume, taker_buy_quote_asset_volume
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         dados_completos,
     )
@@ -658,17 +703,18 @@ def save_klines_sec(conn, symbol, intervalo, klines):
 
 
 # deleta os dados
-def Delete_all_Klines_sec(symbol, intervalo):
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        DELETE FROM klines_sec WHERE symbol = ? AND intervalo = ?
-        """,
-        (symbol, intervalo),
-    )
-    conn.commit()
-    conn.close()
+def Delete_all_Klines_sec():
+    print("🗑️ Deletando todos os registros da tabela klines_sec...")
+    try:
+        conn = conectar()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM klines_sec")
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Erro ao deletar klines: {e}")
+        raise
+    finally:
+        conn.close()
 
 
 # pega os dados do banco para classificação
@@ -687,3 +733,19 @@ def get_data_klines_sec(symbol, intervalo):
     resultados = cursor.fetchall()
     conn.close()
     return resultados
+
+
+def get_date_simulation_sec():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT days, days_start, days_end
+        FROM klines_sec
+        ORDER BY open_time DESC
+        LIMIT 1
+        """
+    )
+    result = cursor.fetchone()
+    conn.close()
+    return result

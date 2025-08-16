@@ -27,7 +27,7 @@ ChartJS.register(
 );
 
 const ChartBarKey = () => {
-    const { labelsKey, valuesKey, symbol, symbolSec, importantPointsKey, selectedPivotsKey, simulationLabelDataKey, simulationValueDataKey } = useContext(AppContext);
+    const { labelsKey, valuesKey, symbol, symbolSec, selectedPivotsKey, simulationLabelDataKey, simulationValueDataKey } = useContext(AppContext);
 
     if (!labelsKey || !valuesKey) {
         return <ProgressSpinner />;
