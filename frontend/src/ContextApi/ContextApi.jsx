@@ -35,6 +35,8 @@ const ContextApi = (props) => {
   const [importantPointsKey, setImportantPointsKey] = useState([]);
   const [selectedPivotsKey, setSelectedPivotsKey] = useState([]);
   const [realTime, setRealTime] = useState("");
+  const modo = realTime;
+
 
   const [dateSimulationStart, setDateSimulationStart] = useState("")
   const [dateSimulationEnd, setDateSimulationEnd] = useState("")
@@ -77,8 +79,6 @@ const ContextApi = (props) => {
   let offsetRefSecondary = 0;
   let offsetRefKey = 0
 
-  console.log(dateSimulationEndSec);
-  console.log(dateSimulationStartSec);
 
 
   /*-----------------------------------------------
@@ -268,7 +268,22 @@ const ContextApi = (props) => {
           }
         }
       );
-      getDateSimulation()
+
+      // 🔹Chamada da API para enviar o modo para simular a classificação
+      await axios.post(`${url}/api/filter_price_atr?symbol=${symbol}&modo=${modo}`);
+      await axios.post(
+        `${url}/api/filter_price_key`,
+        {}, // corpo vazio
+        {
+          params: {
+            modo: modo,
+            symbol: symbol,
+            symbol_sec: symbolSec
+          }
+        }
+      );
+
+      getDateSimulation();
 
       // ✅ Toast de sucesso
       toast.current.show({
@@ -290,6 +305,7 @@ const ContextApi = (props) => {
       console.error("Erro na API de atualização de datas:", error.response?.data || error.message);
     }
   }
+
 
   /*-----------------------------------------------------------------
     2️⃣ Função para Selecionae datas para simulação do ativo Secundário
@@ -308,6 +324,21 @@ const ContextApi = (props) => {
           }
         }
       );
+
+      // 🔹Chamada da API para enviar o modo para simular a classificação
+      await axios.post(`${url}/api/filter_price_atr_second?symbol=${symbolSec}&modo=${modo}`);
+      await axios.post(
+        `${url}/api/filter_price_key`,
+        {}, // corpo vazio
+        {
+          params: {
+            modo: modo,
+            symbol: symbol,    
+            symbol_sec: symbolSec    
+          }
+        }
+      );
+
       getDateSimulation()
 
       // ✅ Toast de sucesso
@@ -331,9 +362,9 @@ const ContextApi = (props) => {
     }
   }
 
-    /*-------------------------------------------------
-   2️⃣ Busca as datas da simulação do ativo Primária
-   ---------------------------------------------------*/
+  /*-------------------------------------------------
+ 2️⃣ Busca as datas da simulação do ativo Primária
+ ---------------------------------------------------*/
   const getDateSimulationSec = async () => {
     try {
       const response = await axios.get(`${url}/api/get_date/simulation_sec`);
@@ -540,7 +571,6 @@ const ContextApi = (props) => {
       const data = response.data;
       const prices = data.map(p => parseFloat(p.closePrice));
       const time = data.map(p => {
-        // p.closeTime está como "27/05/2025 13:00:00"
         return p.closeTime.split(' ')[0];
       });
 
