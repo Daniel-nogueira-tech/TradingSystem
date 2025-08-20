@@ -735,6 +735,7 @@ def get_data_klines_sec(symbol, intervalo):
     return resultados
 
 
+# Pega datas de Simulação para retornar ao frontend
 def get_date_simulation_sec():
     conn = conectar()
     cursor = conn.cursor()

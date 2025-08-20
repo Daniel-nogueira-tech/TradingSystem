@@ -36,6 +36,8 @@ const ContextApi = (props) => {
   const [selectedPivotsKey, setSelectedPivotsKey] = useState([]);
   const [realTime, setRealTime] = useState("");
   const modo = realTime;
+  const [rsi, setRsi] = useState([]);
+  const [rsiTime,setRsiTime] = useState([]);
 
 
   const [dateSimulationStart, setDateSimulationStart] = useState("")
@@ -333,8 +335,8 @@ const ContextApi = (props) => {
         {
           params: {
             modo: modo,
-            symbol: symbol,    
-            symbol_sec: symbolSec    
+            symbol: symbol,
+            symbol_sec: symbolSec
           }
         }
       );
@@ -719,6 +721,30 @@ const ContextApi = (props) => {
 
 
 
+  /*------------------------------------------
+ Função para pegar dados do calculo rsi
+--------------------------------------------*/
+  const getRsi = async (symbol) => {
+    const period = 14;
+    try {
+      const response = await axios.get(
+        `${url}/api/rsi?period=${period}&symbol=${symbol}`
+      );
+      const data = response.data;
+      if (!Array.isArray(data)) {
+      console.warn("Dados do RSI não são um array:", data);
+      return;
+    }
+
+    const value = data.map(p => parseFloat(p.rsi_ma));
+    const time = data.map(p => p.time.split(' ')[0]);
+      setRsi([...value])
+      setRsiTime([...time])
+    } catch (error) {
+      console.error("Erro ao buscar dados do RSI", error);
+    }
+  };
+
 
 
   const handleSave = () => {
@@ -809,7 +835,7 @@ const ContextApi = (props) => {
       clearTimeout(simulationSecTimeoutRef.current);
       setSimulationLabelDataSec([]);
       setSimulationValueDataSec([]);
-      offsetRefSecondary = 0; // reinicia para caso volte pra simulação depois
+      offsetRefSecondary = 0;
       offsetRefPrimary = 0;
     }
   }, [realTime]);
@@ -838,6 +864,7 @@ const ContextApi = (props) => {
             handleGetPointsKey(),
             getDateSimulation(),
             getDateSimulationSec(),
+            getRsi(savedSymbol)
           ], [savedSymbol, savedSymbolSec]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
@@ -951,7 +978,9 @@ const ContextApi = (props) => {
     dateSimulationEndSec,
     dateSimulationSec,
     setDaysValueSec,
-    setShowDaysInputSec
+    setShowDaysInputSec,
+    rsi,
+    rsiTime
 
   };
 

@@ -18,6 +18,14 @@
     justify-content: center;
 
 }
+#ChartRsi{
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-items: center;
+    justify-content: center;
+
+}
 
 .button-search {
     border-radius: 0px 8px 8px 0px;

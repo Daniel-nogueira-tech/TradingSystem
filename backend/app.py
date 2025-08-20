@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from flask import request, jsonify
 from flask_cors import CORS
+import pandas as pd
 from binance.client import Client
 from datetime import datetime, timedelta, timezone
 import time
@@ -45,7 +46,8 @@ from db import (
     get_date_simulation,
     get_date_simulation_sec,
 )
-
+from indicators.rsi import get_rsi_from_db
+from indicators.atr import calcular_atr_movel, suavizar_atr
 
 client = Client()
 app = Flask(__name__)
@@ -91,43 +93,24 @@ def formatar_dados_brutos(dados_brutos):
 
 
 # --------------------------------
-# Função para calcular ATR Inicio
+# Função para calcular RSI INICIO
 # --------------------------------
-def calcular_atr_movel(dados, periodo=14):
-    if len(dados) < periodo + 1:
-        print("Poucos dados para calcular ATR móvel.")
-        return []
+@app.route("/api/rsi", methods=["GET"])
+def api_rsi():
+    period = int(request.args.get("period", 14))
+    media_period = int(request.args.get("media_period", 6))
+    modo = request.args.get("modo", "simulation").strip().lower()
+    symbol = request.args.get("symbol", "").strip().upper()
 
-    atrs = []
-    for i in range(periodo, len(dados)):
-        true_ranges = []
-        for j in range(i - periodo + 1, i + 1):
-            high = dados[j]["Maximo"]
-            low = dados[j]["Minimo"]
-            close_anterior = dados[j - 1]["Fechamento"]
-
-            tr = max(high - low, abs(high - close_anterior), abs(low - close_anterior))
-            true_ranges.append(tr)
-
-        atr = sum(true_ranges) / periodo
-        atrs.append({"index": i, "Tempo": dados[i]["Tempo"], "ATR": atr})
-    return atrs
-
-
-def suavizar_atr(atrs, periodo=180):
-    if len(atrs) < periodo:
-        return []
-
-    atr_suavizado = []
-    for i in range(periodo - 1, len(atrs)):
-        soma = sum([atrs[j]["ATR"] for j in range(i - periodo + 1, i + 1)])
-        media = soma / periodo
-        atr_suavizado.append({"Tempo": atrs[i]["Tempo"], "ATR_Suavizado": media})
-    return atr_suavizado
+    data = get_rsi_from_db(symbol, modo, period, media_period)
+    if data:
+        return jsonify(data), 200
+    else:
+        return jsonify({"message": "Nenhum dado salvo no banco"}), 404
 
 
 # --------------------------------
-# Função para calcular ATR Fim
+# Função para calcular RSI FIM
 # --------------------------------
 
 
@@ -1665,7 +1648,6 @@ def filter_price_atr():
                     )
                     movimento_adicionado = True
 
-    logger.info("\n=== MOVIMENTOS CLASSIFICADOS ===")
     # Cria lista de tuplas para bulk insert
     movimentos_para_salvar = []
 
@@ -1675,7 +1657,6 @@ def filter_price_atr():
         type = p["tipo"]
 
         movimentos_para_salvar.append((date, price, type))
-    logger.info("=================================\n")
 
     # Salva todos os dados de uma vez
     save_trend_clarifications(movimentos_para_salvar)
@@ -2654,7 +2635,6 @@ def filter_price_atr_second():
                     )
                     movimento_adicionado = True
 
-    logger.info("\n=== MOVIMENTOS CLASSIFICADOS ===")
     # Cria lista de tuplas para bulk insert
     movimentos_para_salvar = []
 
@@ -2663,12 +2643,12 @@ def filter_price_atr_second():
         price = p["closePrice"]
         type = p["tipo"]
 
-        logger.info(
-            f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}"
-        )
+        # logger.info(
+        #    f"Hora: {p['closeTime']} | Preço: {p['closePrice']} | Tipo: {p['tipo']}"
+        # )
 
         movimentos_para_salvar.append((date, price, type))
-    logger.info("=================================\n")
+
     # Salva todos os dados de uma vez
     save_trend_clarifications_sec(movimentos_para_salvar)
 

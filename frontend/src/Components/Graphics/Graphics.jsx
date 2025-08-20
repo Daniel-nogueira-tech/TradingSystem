@@ -3,8 +3,9 @@ import './Graphics.css'
 import Chart from '../MyChart/Chart '
 import ChartSecondary from '../MyChart/ChartSecondary'
 import ChartBarKey from '../MyChart/ChartBarKey'
+import ChartRsi from '../MyChart/ChartRsi'
 import { AppContext } from '../../ContextApi/ContextApi';
-import Swal from 'sweetalert2'
+
 
 const Graphics = () => {
   const { dadosPrice,
@@ -239,18 +240,18 @@ const Graphics = () => {
       <div className='graphics' id='graphics'>
 
         <div>
-          <h3>Dados da  operacao</h3>
+          <h3>Dados das operações</h3>
           <div className='price' >
-            <p> Ultimo preco: 330.524</p>
+            <p>Ultimo preço: 330.524</p>
           </div>
           <div className='price' >
-            <p> preco medio: 330.524</p>
+            <p>Preço médio: 330.524</p>
           </div>
           <div className='price'>
-            <p> Preco de comprar: 330.524</p>
+            <p>Preço de comprar: 330.524</p>
           </div>
           <div className='price'>
-            <p> Preco de stop: 330.524</p>
+            <p>Preço de stop: 330.524</p>
           </div>
           <div className='price'>
             <p> Preco de venda: 330.524</p>
@@ -259,6 +260,7 @@ const Graphics = () => {
             <p> Preco de stop: 330.524</p>
           </div>
         </div>
+
 
         <div>
           <h3>Pontos importantes</h3>
@@ -296,6 +298,7 @@ const Graphics = () => {
 
           </div>
 
+
           {views === 'chave' && (
             <div>
               <div className='price' onClick={() => togglePivotKey('Pivô' || 'activePivo', importantPointsKey?.["Tendência"]?.price)}>
@@ -314,6 +317,10 @@ const Graphics = () => {
             </div>
           )}
         </div>
+      </div>
+
+      <div className='graphics' id='ChartRsi'>
+        <ChartRsi />
       </div>
 
 
