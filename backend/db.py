@@ -327,11 +327,17 @@ def get_trend_clarifications_key():
 # ==============================================
 # pegar os pontos importantes classificados
 ################################################
+# variável global
+ultimo_resultado = {}
+
+
 def important_points():
+    global ultimo_resultado
+
     conn = conectar()
     cursor = conn.cursor()
 
-    # Buscar a última tendência (alta ou baixa)
+    # Buscar a última tendência
     cursor.execute(
         """
         SELECT date, price, type 
@@ -343,7 +349,7 @@ def important_points():
     )
     trend = cursor.fetchone()
 
-    # Buscar a última Rally Natural (Alta ou topo)
+    # Buscar a última Rally Natural
     cursor.execute(
         """SELECT date, price, type
         FROM trend_clarifications
@@ -353,8 +359,8 @@ def important_points():
         """
     )
     rally = cursor.fetchone()
-    print("Rally encontrado:", rally)
-    # Buscar a última Reação Natural (fundo) que ocorreu ANTES da Rally Natural
+
+    # Buscar a última Reação Natural antes da Rally Natural
     reaction = None
     if rally:
         cursor.execute(
@@ -370,31 +376,30 @@ def important_points():
         )
         reaction = cursor.fetchone()
 
-    # Buscar a última Reação secundária
+    # Reação secundária
     cursor.execute(
         """
-     SELECT date, price, type
-     FROM trend_clarifications
-     WHERE type LIKE 'Reação secundária%'
-     ORDER BY date DESC
-     LIMIT 1
-      """
+        SELECT date, price, type
+        FROM trend_clarifications
+        WHERE type LIKE 'Reação secundária%'
+        ORDER BY date DESC
+        LIMIT 1
+        """
     )
     secondary_reaction = cursor.fetchone()
 
-    # Buscar a última Rally secundária
+    # Rally secundária
     cursor.execute(
         """
-     SELECT date, price, type
-     FROM trend_clarifications
-     WHERE type LIKE 'Rally secundária%'
-     ORDER BY date DESC
-     LIMIT 1
-      """
+        SELECT date, price, type
+        FROM trend_clarifications
+        WHERE type LIKE 'Rally secundária%'
+        ORDER BY date DESC
+        LIMIT 1
+        """
     )
     secondary_rally = cursor.fetchone()
 
-    # fecha
     conn.close()
 
     result = {}
@@ -402,18 +407,27 @@ def important_points():
     if trend:
         result["Tendência"] = {"date": trend[0], "price": trend[1], "type": trend[2]}
 
-    if reaction:
+    if rally:
         result["Rally Natural"] = {
+            "date": rally[0],
+            "price": rally[1],
+            "type": rally[2],
+        }
+
+    if reaction:
+        result["Reação Natural"] = {
             "date": reaction[0],
             "price": reaction[1],
             "type": reaction[2],
         }
+
     if secondary_reaction:
         result["Reação secundária"] = {
             "date": secondary_reaction[0],
             "price": secondary_reaction[1],
             "type": secondary_reaction[2],
         }
+
     if secondary_rally:
         result["Rally secundária"] = {
             "date": secondary_rally[0],
@@ -421,13 +435,26 @@ def important_points():
             "type": secondary_rally[2],
         }
 
-    return result if result else {"mensagem": "Nenhum ponto encontrado"}
+    # Só atualiza se encontrou algo
+    if result:
+        ultimo_resultado = result
+
+    return (
+        ultimo_resultado
+        if ultimo_resultado
+        else {"mensagem": "Nenhum ponto encontrado"}
+    )
 
 
 # ======================================================
 # pegar os pontos importantes classificados ativo chave
 ########################################################
+ultimo_resultado_key = {}
+
+
 def important_points_key():
+    global ultimo_resultado_key
+
     conn = conectar()
     cursor = conn.cursor()
 
@@ -470,8 +497,6 @@ def important_points_key():
         )
         reaction = cursor.fetchone()
 
-    #############################################
-
     # Buscar a última Reação secundária
     cursor.execute(
         """
@@ -495,6 +520,7 @@ def important_points_key():
       """
     )
     secondary_rally = cursor.fetchone()
+
     conn.close()
 
     # Monta o resultado
@@ -502,18 +528,28 @@ def important_points_key():
 
     if trend:
         result["Tendência"] = {"date": trend[0], "price": trend[1], "type": trend[2]}
-    if reaction:
+
+    if rally:
         result["Rally Natural"] = {
+            "date": rally[0],
+            "price": rally[1],
+            "type": rally[2],
+        }
+
+    if reaction:
+        result["Reação Natural"] = {
             "date": reaction[0],
             "price": reaction[1],
             "type": reaction[2],
         }
+
     if secondary_reaction:
         result["Reação secundária"] = {
             "date": secondary_reaction[0],
             "price": secondary_reaction[1],
             "type": secondary_reaction[2],
         }
+
     if secondary_rally:
         result["Rally secundária"] = {
             "date": secondary_rally[0],
@@ -521,7 +557,15 @@ def important_points_key():
             "type": secondary_rally[2],
         }
 
-    return result if result else {"mensagem": "Nenhum ponto encontrado"}
+    # Só atualiza se encontrou algo
+    if result:
+        ultimo_resultado = result
+
+    return (
+        ultimo_resultado
+        if ultimo_resultado
+        else {"mensagem": "Nenhum ponto encontrado"}
+    )
 
 
 # ============================================================
@@ -748,5 +792,65 @@ def get_date_simulation_sec():
         """
     )
     result = cursor.fetchone()
+    conn.close()
+    return result
+
+
+# --------------------------------
+# Função para salvar RSI
+# --------------------------------
+def init_db_rsi():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS amrsi (
+            time TEXT PRIMARY KEY,
+            amrsi REAL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def save_rsi(data):
+    """
+    amrsi: lista de tuplas [(time, amrsi), ...]
+    """
+    conn = conectar()
+    cursor = conn.cursor()
+
+    # Se você quer sobrescrever tudo:
+    cursor.execute("DELETE FROM amrsi")
+
+    # transforma em lista de tuplas (time, amrsi)
+    amrsi = [
+        (d["time"], d["rsi_ma"] if d.get("rsi_ma") is not None else d.get("rsi"))
+        for d in data
+    ]
+
+    # Inserção em massa
+    cursor.executemany(
+        "INSERT INTO amrsi(time, amrsi) VALUES (?, ?)",
+        amrsi,
+    )
+
+    conn.commit()
+    conn.close()
+
+
+# Pega datas de Simulação para retornar ao frontend
+def get_date_rsi():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT time, amrsi
+        FROM amrsi
+        ORDER BY time ASC
+        """
+    )
+    result = cursor.fetchall()
     conn.close()
     return result

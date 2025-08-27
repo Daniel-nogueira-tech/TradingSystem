@@ -29,10 +29,11 @@ ChartJS.register(
 
 
 const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
-    const { rsi, rsiTime } = useContext(AppContext);
+    const { rsi, rsiTime, simulationValueDataRsi, simulationLabelDataRsi } = useContext(AppContext);
 
-
+   
     const value = rsi;
+    const label = rsiTime;
 
     const getPointColor = (v) => {
         if (v <= 20) return 'rgba(255, 0, 0, 1)';
@@ -40,13 +41,17 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
         return 'rgba(0, 255, 8, 1)';
     };
 
+    const activeValue = simulationValueDataRsi?.length > 0 ? simulationValueDataRsi : value;
+    const activeLabel = simulationLabelDataRsi?.length > 0 ? simulationLabelDataRsi : label;
+
+ 
 
     const data = {
-        labels: rsiTime,
+        labels: activeLabel,
         datasets: [
             {
                 label: 'índice',
-                data: value,
+                data: activeValue,
                 fill: true,
                 backgroundColor: (context) => {
                     const { chart } = context;
@@ -74,7 +79,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
                     gradient.addColorStop(ratio80, 'rgba(255, 0, 0, 0.51)'); // laranja mais leve
 
                     // Entre 20 e 80 (neutro)
-                    gradient.addColorStop(ratio20, 'rgba(0, 255, 8, 0.22)'); // verde leve
+                    gradient.addColorStop(ratio20, 'rgba(0, 255, 8, 0.36)'); // verde leve
 
 
 
@@ -99,13 +104,13 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
 
                     // Acima de 80 (linha vermelha)
                     gradient.addColorStop(0, 'rgba(255, 0, 0, 1)');
-                    gradient.addColorStop(ratio80, 'rgba(255, 102, 0, 0.8)');
+                    gradient.addColorStop(ratio80, 'rgba(255, 25, 0, 1)');
 
                     // Entre 20 e 80 (linha verde)
-                    gradient.addColorStop(ratio20, 'rgba(42, 255, 4, 1)');
+                    gradient.addColorStop(ratio20, 'rgba(38, 255, 0, 1)');
 
                     // Abaixo de 20 (linha verde escuro)
-                    gradient.addColorStop(1, 'rgba(0, 150, 0, 0.9)');
+                    gradient.addColorStop(1, 'rgba(21, 255, 0, 1)');
 
                     return gradient;
                 },
@@ -119,7 +124,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
             // 🔹 Linha fixa no RSI 20
             {
                 label: 'AMRSI 20',
-                data: new Array(rsiTime.length).fill(20), // Linha reta
+                data: new Array(activeLabel.length).fill(20), // Linha reta
                 borderColor: 'white',
                 borderWidth: 1,
                 borderDash: [5, 5], // Linha tracejada
@@ -128,7 +133,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
             // 🔹 Linha fixa no RSI 80
             {
                 label: 'AMRSI 80',
-                data: new Array(rsiTime.length).fill(80),
+                data: new Array(activeLabel.length).fill(80),
                 borderColor: 'white',
                 borderWidth: 1,
                 borderDash: [5, 5],
@@ -138,7 +143,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
             // 🔹 Linha fixa no RSI 30
             {
                 label: 'AMRSI 30',
-                data: new Array(rsiTime.length).fill(30),
+                data: new Array(activeLabel.length).fill(30),
                 borderColor: 'orange',
                 borderWidth: 1,
                 borderDash: [5, 5],
@@ -148,7 +153,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
             // 🔹 Linha fixa no RSI 30
             {
                 label: 'AMRSI 60',
-                data: new Array(rsiTime.length).fill(70),
+                data: new Array(activeLabel.length).fill(70),
                 borderColor: 'orange',
                 borderWidth: 1,
                 borderDash: [5, 5],

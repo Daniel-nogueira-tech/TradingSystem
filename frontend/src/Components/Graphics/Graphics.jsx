@@ -30,6 +30,20 @@ const Graphics = () => {
   const [currentPage_2, setCurrentPage_2] = useState(1);
   const [currentPageKey, setCurrentPageKey] = useState(1);
   const [views, setViews] = useState('primario');
+  const [activeStates, setActiveStates] = useState({
+    tendencia: false,
+    rallyNatural: false,
+    reacaoSec: false,
+    rallySec: false,
+    reacaoNatu: false
+  });
+  const [activeStatesKey, setActiveStatesKey] = useState({
+    tendencia: false,
+    rallyNatural: false,
+    reacaoSec: false,
+    rallySec: false,
+    reacaoNatu: false
+  });
 
   const itemsPerPage = 20;
   const itemsPerPage_2 = 20;
@@ -39,6 +53,7 @@ const Graphics = () => {
   const activeTable = simulationValueDataComplete?.length > 0 ? simulationValueDataComplete : dadosTables;
   const activeTableSec = simulationValueDataCompleteSec?.length > 0 ? simulationValueDataCompleteSec : dadosTablesSec;
   const activeTableKey = simulationValueDataCompleteKey?.length > 0 ? simulationValueDataCompleteKey : dadosTablesKey;
+  console.log(importantPointsKey);
 
 
   const movimentos = [
@@ -185,6 +200,22 @@ const Graphics = () => {
   }, [linhasKey, currentPageKey])
 
 
+// Ativa as botas de pivô
+  const handleClick = (key, value) => {
+    setActiveStates((prev) => ({
+      ...prev,
+      [key]: !prev[key], // inverte só o clicado
+    }));
+    togglePivot("Pivô", value);
+  };
+
+  const handleClickKey = (key, value) => {
+    setActiveStatesKey((prev) => ({
+      ...prev,
+      [key]: !prev[key], // inverte só o clicado
+    }));
+    togglePivotKey("Pivô", value);
+  };
 
 
   return (
@@ -281,17 +312,57 @@ const Graphics = () => {
             {/* tabela de dados do primeiro ativo */}
             {views === 'primario' && (
               <div>
-                <div className='price' onClick={() => togglePivot('Pivô' || 'activePivo', importantPoints?.["Tendência"]?.price)}>
-                  <p>Tendência: {importantPoints?.["Tendência"]?.price.toFixed(2) ?? '---'}</p>
+                <div
+                  className={`price ${activeStates.tendencia ? "active" : ""}`}
+                  onClick={() => handleClick("tendencia", importantPoints?.["Tendência"]?.price)}
+                >
+                  <p>
+                    Tendência: {importantPoints?.["Tendência"]?.price?.toFixed(2) ?? "---"}
+                  </p>
                 </div>
-                <div className='price' onClick={() => togglePivot('Pivô', importantPoints?.["Rally Natural"]?.price.toFixed(2))}>
-                  <p> Rally Natural: {importantPoints?.["Rally Natural"]?.price.toFixed(2) ?? '---'}</p>
+
+                <div
+                  className={`price ${activeStates.rallyNatural ? "active" : ""}`}
+                  onClick={() =>
+                    handleClick("rallyNatural", importantPoints?.["Rally Natural"]?.price?.toFixed(2))
+                  }
+                >
+                  <p>
+                    Reação Natural: {importantPoints?.["Rally Natural"]?.price?.toFixed(2) ?? "---"}
+                  </p>
                 </div>
-                <div className='price' onClick={() => togglePivot('Pivô', importantPoints?.["Reação secundária"]?.price.toFixed(2))}>
-                  <p>Rally secundária: {importantPoints?.["Reação secundária"]?.price.toFixed(2) ?? '---'}</p>
+
+                <div
+                  className={`price ${activeStates.reacaoNatu ? "active" : ""}`}
+                  onClick={() =>
+                    handleClick("reacaoNatu", importantPoints?.["Reação Natural"]?.price?.toFixed(2))
+                  }
+                >
+                  <p>
+                    Rally Natural: {importantPoints?.["Reação Natural"]?.price?.toFixed(2) ?? "---"}
+                  </p>
                 </div>
-                <div className='price' onClick={() => togglePivot('Pivô', importantPoints?.["Rally secundária"]?.price.toFixed(2))}>
-                  <p>Reação secundária: {importantPoints?.["Rally secundária"]?.price.toFixed(2) ?? '---'}</p>
+
+                <div
+                  className={`price ${activeStates.reacaoSec ? "active" : ""}`}
+                  onClick={() =>
+                    handleClick("reacaoSec", importantPoints?.["Reação secundária"]?.price?.toFixed(2))
+                  }
+                >
+                  <p>
+                    Reação secundária: {importantPoints?.["Reação secundária"]?.price?.toFixed(2) ?? "---"}
+                  </p>
+                </div>
+
+                <div
+                  className={`price ${activeStates.rallySec ? "active" : ""}`}
+                  onClick={() =>
+                    handleClick("rallySec", importantPoints?.["Rally secundária"]?.price?.toFixed(2))
+                  }
+                >
+                  <p>
+                    Rally secundária: {importantPoints?.["Rally secundária"]?.price?.toFixed(2) ?? "---"}
+                  </p>
                 </div>
               </div>
             )}
@@ -301,19 +372,58 @@ const Graphics = () => {
 
           {views === 'chave' && (
             <div>
-              <div className='price' onClick={() => togglePivotKey('Pivô' || 'activePivo', importantPointsKey?.["Tendência"]?.price)}>
-                <p>Tendência: {importantPointsKey?.["Tendência"]?.price.toFixed(2) ?? '---'}</p>
-              </div>
-              <div className='price' onClick={() => togglePivotKey('Pivô', importantPointsKey?.["Rally Natural"]?.price)}>
-                <p>Rally Natural: {importantPointsKey?.["Rally Natural"]?.price.toFixed(2) ?? '---'}</p>
-              </div>
-              <div className='price' onClick={() => togglePivotKey('Pivô', importantPointsKey?.["Reação secundária"]?.price)}>
-                <p>Rally secundária: {importantPointsKey?.["Reação secundária"]?.price ?? '---'}</p>
-              </div>
-              <div className='price' onClick={() => togglePivotKey('Pivô', importantPointsKey?.["Rally secundária"]?.price)}>
-                <p>Reação secundária: {importantPointsKey?.["Rally secundária"]?.price ?? '---'}</p>
+              <div
+                className={`price ${activeStatesKey.tendencia ? "active" : ""}`}
+                onClick={() => handleClickKey("tendencia", importantPointsKey?.["Tendência"]?.price)}
+              >
+                <p>
+                  Tendência: {importantPointsKey?.["Tendência"]?.price?.toFixed(2) ?? "---"}
+                </p>
               </div>
 
+              <div
+                className={`price ${activeStatesKey.rallyNatural ? "active" : ""}`}
+                onClick={() =>
+                  handleClickKey("rallyNatural", importantPointsKey?.["Rally Natural"]?.price?.toFixed(2))
+                }
+              >
+                <p>
+                  Reação Natural: {importantPointsKey?.["Rally Natural"]?.price?.toFixed(2) ?? "---"}
+                </p>
+              </div>
+
+              <div
+                className={`price ${activeStatesKey.reacaoNatu ? "active" : ""}`}
+                onClick={() =>
+                  handleClickKey("reacaoNatu", importantPointsKey?.["Reação Natural"]?.price?.toFixed(2))
+                }
+              >
+                <p>
+                  Rally Natural: {importantPointsKey?.["Reação Natural"]?.price?.toFixed(2) ?? "---"}
+                </p>
+              </div>
+
+              <div
+                className={`price ${activeStatesKey.reacaoSec ? "active" : ""}`}
+                onClick={() =>
+                  handleClickKey("reacaoSec", importantPointsKey?.["Reação secundária"]?.price?.toFixed(2))
+                }
+              >
+                <p>
+                  Reação secundária: {importantPointsKey?.["Reação secundária"]?.price?.toFixed(2) ?? "---"}
+                </p>
+              </div>
+
+              <div
+                className={`price ${activeStatesKey.rallySec ? "active" : ""}`}
+                onClick={() =>
+                  handleClickKey("rallySec", importantPointsKey?.["Rally secundária"]?.price?.toFixed(2))
+                }
+              >
+                <p>
+                  Rally secundária: {importantPointsKey?.["Rally secundária"]?.price?.toFixed(2) ?? "---"}
+                </p>
+              </div>
             </div>
           )}
         </div>

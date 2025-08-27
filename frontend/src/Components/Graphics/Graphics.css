@@ -229,7 +229,16 @@ th {
   border-color: #7e50aa;
   font-weight: bold;
 }
+#side-button{
+width: 100%;
+height: 10px;
+}
 
+.side-button:hover,
+.active {
+  background: var(--navbar-color-active);
+  transform: scale(1.01);
+}
 
 @media (max-width:1900px) {
   .graphics {

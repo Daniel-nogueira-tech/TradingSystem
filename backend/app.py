@@ -45,9 +45,12 @@ from db import (
     get_trend_clarifications_key,
     get_date_simulation,
     get_date_simulation_sec,
+    init_db_rsi,
+    save_rsi,
+    get_date_rsi,
 )
-from indicators.rsi import get_rsi_from_db
 from indicators.atr import calcular_atr_movel, suavizar_atr
+from indicators.rsi import get_rsi
 
 client = Client()
 app = Flask(__name__)
@@ -70,6 +73,7 @@ create_table_trend_clarifications_key()
 clear_table_trend_clarifications_key()
 init_db()
 init_db_sec()
+init_db_rsi()
 
 
 # --------------------------------------------------------
@@ -97,16 +101,42 @@ def formatar_dados_brutos(dados_brutos):
 # --------------------------------
 @app.route("/api/rsi", methods=["GET"])
 def api_rsi():
-    period = int(request.args.get("period", 14))
-    media_period = int(request.args.get("media_period", 6))
-    modo = request.args.get("modo", "simulation").strip().lower()
-    symbol = request.args.get("symbol", "").strip().upper()
+    symbol = request.args.get("symbol", "BTCUSDT")
+    modo = request.args.get("modo", "")
+    offset = request.args.get("offset", type=int)
+    limit = request.args.get("limit", type=int)
+    period = request.args.get("period", default=14, type=int)
 
-    data = get_rsi_from_db(symbol, modo, period, media_period)
-    if data:
-        return jsonify(data), 200
-    else:
-        return jsonify({"message": "Nenhum dado salvo no banco"}), 404
+    data = get_rsi(symbol, modo=modo, offset=offset, limit=limit, period=period)
+
+    save_rsi(data)
+    return jsonify(data)
+
+
+# --------------------------------
+# Função simular rsi
+# --------------------------------
+@app.route("/api/simulate_amrsi", methods=["GET"])
+def simulate_amrsi():
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 10))
+
+    amrsi = get_date_rsi()
+
+    if not amrsi:
+        return jsonify([])
+
+    amrsi_fatiado = amrsi[offset : offset + limit]
+
+    dados = [
+        {
+            "time": m[0],
+            "amrsi": m[1],
+        }
+        for m in amrsi_fatiado
+    ]
+
+    return jsonify(dados)
 
 
 # --------------------------------
@@ -676,7 +706,6 @@ def simulate_price_atr_key():
 def filter_price_atr():
     symbol = request.args.get("symbol", "").strip().upper()
     modo = request.args.get("modo", "").strip().lower()
-    print("MODO", modo)
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
 
