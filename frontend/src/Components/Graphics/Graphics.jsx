@@ -53,7 +53,7 @@ const Graphics = () => {
   const activeTable = simulationValueDataComplete?.length > 0 ? simulationValueDataComplete : dadosTables;
   const activeTableSec = simulationValueDataCompleteSec?.length > 0 ? simulationValueDataCompleteSec : dadosTablesSec;
   const activeTableKey = simulationValueDataCompleteKey?.length > 0 ? simulationValueDataCompleteKey : dadosTablesKey;
-  console.log(importantPointsKey);
+
 
 
   const movimentos = [

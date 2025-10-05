@@ -1,5 +1,6 @@
 import React, { useContext } from 'react';
 import zoomPlugin from 'chartjs-plugin-zoom';
+import { ProgressBar } from 'primereact/progressbar';
 import {
     Chart as ChartJS,
     BarElement,
@@ -35,7 +36,8 @@ const ChartBarKey = () => {
 
     const activeValue = simulationValueDataKey?.length > 0 ? simulationValueDataKey : valuesKey;
     const activeLabel = simulationLabelDataKey?.length > 0 ? simulationLabelDataKey : labelsKey;
-
+    // Simula carregamento dos dados
+    const isLoading = !(activeValue && activeValue.length > 0);
 
     // Gerar cores com base na comparação com o valor anterior
     const backgroundColor = activeValue.map((valor, index) => {
@@ -140,11 +142,24 @@ const ChartBarKey = () => {
     };
 
     return (
-        <div style={{ width: '600px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-            <Bar key={JSON.stringify(selectedPivotsKey)} data={data} options={options} plugins={[customLabelPlugin]} />
-        </div>
-
-    );
+        <>
+            {isLoading ? (
+                <div style={{ width: "300px", height: "270px", margin: "20px auto", textAlign: "center" }}>
+                    <ProgressBar mode="indeterminate" style={{ height: '8px', top: "110px" }} />
+                </div>
+            ) : (
+                <div style={{ width: '600px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Bar
+                        key={JSON.stringify(selectedPivotsKey)}
+                        data={data}
+                        options={options}
+                        plugins={[customLabelPlugin]}
+                    />
+                </div>
+            )}
+        </>
+    )
 };
+
 
 export default ChartBarKey;

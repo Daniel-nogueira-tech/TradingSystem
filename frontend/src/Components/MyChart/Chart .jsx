@@ -1,6 +1,7 @@
 import React, { useRef, useContext } from 'react';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import './MyChart.css';
+import { ProgressBar } from 'primereact/progressbar';
 import {
     Chart as ChartJS,
     BarElement,
@@ -54,6 +55,7 @@ const ChartBar = () => {
     } = useContext(AppContext);
     const chartRef = useRef();
 
+
     const handleZoomIn = () => {
         if (chartRef.current) chartRef.current.zoom(1.2);
     };
@@ -67,8 +69,13 @@ const ChartBar = () => {
     };
 
 
+
+
     const activeValue = simulationValueData?.length > 0 ? simulationValueData : values;
     const activeLabel = simulationLabelData?.length > 0 ? simulationLabelData : labels;
+    // Simula carregamento dos dados
+    const isLoading = !(activeValue && activeValue.length > 0);
+
 
 
     const backgroundColor = activeValue.map((valor, index) => {
@@ -180,7 +187,7 @@ const ChartBar = () => {
         if (modoSalve) {
             setRealTime(modoSalve)
         }
-    })
+    }, [])
     useEffect(() => {
         if (realTime) {
             localStorage.setItem("realTimeMode", realTime);
@@ -334,7 +341,7 @@ const ChartBar = () => {
                             </button>
 
                             <button onClick={onChangeHandlerDateSimulationEnd}>
-                                Até : {dateSimulationEnd} 
+                                Até : {dateSimulationEnd}
                             </button>
                         </>
                     )}
@@ -368,16 +375,26 @@ const ChartBar = () => {
 
                 </div>
             )}
+            {isLoading ? (
+                <div style={{ width: "300px", height: "270px", margin: "20px auto", textAlign: "center"}}>
+                        <ProgressBar mode="indeterminate" style={{ height: '8px', top:"110px"}} />
+                </div>
+            ) : (
+                < >
+                    <div>
+                        <Bar
+                            key={JSON.stringify(selectedPivots)}
+                            ref={chartRef}
+                            data={data}
+                            options={options}
+                            plugins={[customLabelPlugin, zoomPlugin]}
+                        />
+                    </div>
 
-
-            <Bar
-                key={JSON.stringify(selectedPivots)}
-                ref={chartRef}
-                data={data}
-                options={options}
-                plugins={[customLabelPlugin, zoomPlugin]}
-            />
+                </>
+            )}
         </div>
+
     );
 };
 

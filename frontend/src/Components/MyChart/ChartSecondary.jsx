@@ -1,5 +1,6 @@
 import React, { useRef, useContext, useEffect } from 'react';
 import zoomPlugin from 'chartjs-plugin-zoom';
+import { ProgressBar } from 'primereact/progressbar';
 import {
     Chart as ChartJS,
     BarElement,
@@ -65,7 +66,8 @@ const ChartBarSecondary = () => {
 
     const activeValue = simulationValueDataSec?.length > 0 ? simulationValueDataSec : valuesSecondary;
     const activeLabel = simulationLabelDataSec?.length > 0 ? simulationLabelDataSec : labelsSecondary;
-
+    // Simula carregamento dos dados
+    const isLoading = !(activeValue && activeValue.length > 0);
 
     const backgroundColor = activeValue.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)';
@@ -365,12 +367,20 @@ const ChartBarSecondary = () => {
                 </div>
             )}
 
-            <Bar
-                ref={chartRef}
-                data={data}
-                options={options}
-                plugins={[customLabelPlugin, zoomPlugin]}
-            />
+            {isLoading ? (
+                <div style={{ width: "300px", height: "270px", margin: "20px auto", textAlign: "center" }}>
+                    <ProgressBar mode="indeterminate" style={{ height: '8px', top: "110px" }} />
+                </div>
+            ) : (
+                <div>
+                    <Bar
+                        ref={chartRef}
+                        data={data}
+                        options={options}
+                        plugins={[customLabelPlugin, zoomPlugin]}
+                    />
+                </div>
+            )}
         </div>
     );
 };

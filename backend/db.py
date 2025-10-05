@@ -149,7 +149,8 @@ def create_table_trend_clarifications():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date INT NOT NULL,
             price REAL NOT NULL,
-            type TEXT NOT NULL
+            type TEXT NOT NULL,
+            atr REAL NOT NULL
         )
         """
     )
@@ -173,8 +174,8 @@ def save_trend_clarifications(movimentos):
 
     cursor.executemany(
         """
-        INSERT INTO trend_clarifications (date, price, type)
-        VALUES (?, ?, ?)
+        INSERT INTO trend_clarifications (date, price, type, atr )
+        VALUES (?, ?, ?, ?)
         """,
         movimentos,
     )
@@ -188,7 +189,7 @@ def get_trend_clarifications():
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT date, price, type FROM trend_clarifications ORDER BY date ASC"
+        "SELECT date, price, type, atr FROM trend_clarifications ORDER BY date ASC"
     )
     dados = cursor.fetchall()
     conn.close()
@@ -328,7 +329,8 @@ def get_trend_clarifications_key():
 # pegar os pontos importantes classificados
 ################################################
 # variável global
-ultimo_resultado = {}
+
+ultimo_resultado = None
 
 
 def important_points():
@@ -367,7 +369,7 @@ def important_points():
             """
             SELECT date, price, type
             FROM trend_clarifications
-            WHERE type LIKE 'Reação Natural%'
+            WHERE type LIKE 'Reação Natural (fundo)'
               AND date <= ?
             ORDER BY date DESC
             LIMIT 1
@@ -449,7 +451,8 @@ def important_points():
 # ======================================================
 # pegar os pontos importantes classificados ativo chave
 ########################################################
-ultimo_resultado_key = {}
+
+ultimo_resultado_key = None
 
 
 def important_points_key():
@@ -559,11 +562,11 @@ def important_points_key():
 
     # Só atualiza se encontrou algo
     if result:
-        ultimo_resultado = result
+        ultimo_resultado_key = result
 
     return (
-        ultimo_resultado
-        if ultimo_resultado
+        ultimo_resultado_key
+        if ultimo_resultado_key
         else {"mensagem": "Nenhum ponto encontrado"}
     )
 
@@ -679,6 +682,51 @@ def get_date_simulation():
     result = cursor.fetchone()
     conn.close()
     return result
+
+
+# cria tabela para precos
+def init_db_prices():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """CREATE TABLE IF NOT EXISTS current_price(
+            time TEXT PRIMARY KEY,
+            close REAL
+        )"""
+    )
+    conn.commit()
+    conn.close()
+
+
+# salva preço atual
+def save_current_price(prices):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.executemany(
+        "INSERT OR REPLACE INTO current_price (time, close) VALUES (?, ?)",
+        prices,
+    )
+    conn.commit()
+    conn.close()
+
+
+# delete preço atual
+def delete_current_price():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM current_price")
+    conn.commit()
+    conn.close()
+
+
+# pega os preço completos
+def get_current_price():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT time,close FROM current_price ORDER BY time ASC")
+    dados = cursor.fetchall()
+    conn.close()
+    return dados
 
 
 # ============================================================

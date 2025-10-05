@@ -60,12 +60,17 @@ const ContextApi = (props) => {
   const [simulationValueDataKey, setSimulationValueDataKey] = useState([]);
   const [simulationLabelDataRsi, setSimulationLabelDataRsi] = useState([]);
   const [simulationValueDataRsi, setSimulationValueDataRsi] = useState([]);
+  const [simulationLabelDataPrice, setSimulationLabelDataPrice] = useState([]);
+  const [simulationValueDataPrice, setSimulationValueDataPrice] = useState([]);
 
 
   const [simulationValueDataComplete, setSimulationValueDataComplete] = useState([]);
   const [simulationValueDataCompleteSec, setSimulationValueDataCompleteSec] = useState([]);
   const [simulationValueDataCompleteKey, setSimulationValueDataCompleteKey] = useState([]);
   const [simulationValueDataCompleteRsi, setSimulationValueDataCompleteRsi] = useState([]);
+  const [simulationValueDataCompletePrice, setSimulationValueDataCompletePrice] = useState([]);
+
+
 
 
   const simulationTimeoutRef = useRef(null);
@@ -85,15 +90,26 @@ const ContextApi = (props) => {
   const [isPausedRsi, setIsPausedRsi] = useState(false);
   const isPausedRsiRef = useRef(isPausedRsi);
 
+  const [isPausedPrice, setIsPausedPrice] = useState(false);
+  const isPausedPriceRef = useRef(isPausedPrice)
+
   const toastShownRef = useRef(false);
 
   let offsetRefPrimary = 0;
   let offsetRefSecondary = 0;
-  let offsetRefKey = 0
-  let offsetRefRsi = 0
+  let offsetRefKey = 0;
+  let offsetRefRsi = 0;
+  let offsetRefPrice = 0;
 
   const period = 14; /* periodo do AMRSI */
 
+  // Estado para armazenar o último topo anterior
+  const [ultimoTopoAnterior, setUltimoTopoAnterior] = useState(null);
+  const [ultimoPivoAnterior, setUltimoPivoAnterior] = useState(null);
+  const [ultimoPivoAtual, setultimoPivoAtual] = useState(null);
+  const [penultimoValor, setPenultimoValor] = useState([]);
+  const [retestPoints, setRetestPoints] = useState([]);
+  const [currentTrend, setCurrentTrend] = useState("");
 
 
   /*-----------------------------------------------
@@ -154,149 +170,185 @@ const ContextApi = (props) => {
   /*---------------------------------------------
     Função para simulação pega os dados fatiados
    -----------------------------------------------*/
-const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
-  // se não estiver em modo simulation, cancela
-  if (realTime !== 'simulation' && dateSimulationStart !== 'Nada') {
-    console.log("🛑 Simulação cancelada: modo não é 'simulation'");
-    return;
-  }
-
-  // cancela timeout anterior (evita acumular)
-  clearTimeout(simulationTimeoutSyncRef.current);
-
-  try {
-    // helper para buscar 1 candle por endpoint/offset
-    const fetchOne = async (endpoint, offset) => {
-      const resp = await axios.get(`${endpoint}?offset=${offset}&limit=1`);
-      return (resp.data && resp.data.length) ? resp.data[0] : null;
-    };
-
-    // endpoints
-    const epPrimary = `${url}/api/simulate_price_atr`;
-    const epSecondary = `${url}/api/simulate_price_atr_sec`;
-    const epKey = `${url}/api/simulate_price_atr_key`;
-    const epRsi = `${url}/api/simulate_amrsi`;
-
-    // checa pausa no primary antes de prosseguir
-    if (isPausedRef.current) {
-      console.log("⏸️ Simulação pausada (primary). Tentando novamente em 500ms...");
-      simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+  const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
+    // se não estiver em modo simulation, cancela
+    if (realTime !== 'simulation' && dateSimulationStart !== 'Nada') {
+      console.log("🛑 Simulação cancelada: modo não é 'simulation'");
       return;
     }
 
-    // pega próximo candle do primary (driver)
-    let candleP = await fetchOne(epPrimary, offsetRefPrimary);
-    if (!candleP) {
-      console.log("✅ Simulação finalizada (primary terminou)");
-      return;
-    }
-
-    // data (somente parte data "YYYY-MM-DD" para sincronização por data)
-    let dateP = candleP.closeTime.split(' ')[0];
-
-    // registra o primary (use closeTime completo para label, para distinguir múltiplos)
-    setSimulationValueData(prev => [...prev, parseFloat(candleP.closePrice)]);
-    setSimulationLabelData(prev => [...prev, candleP.closeTime]);
-    setSimulationValueDataComplete(prev => [...prev, candleP]);
-
-    // avança o offset do primary para o próximo passo
-    offsetRefPrimary += 1;
-
-    // agora, processa todos os secondary até <= dateP
-    while (true) {
-      if (isPausedSecRef.current) {
-        console.log("⏸️ Pausado durante processamento do secondary. Retomando depois...");
-        simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
-        return;
-      }
-
-      let candleS = await fetchOne(epSecondary, offsetRefSecondary);
-      if (!candleS) {
-        break;
-      }
-
-      let dateS = candleS.closeTime.split(' ')[0];
-      if (dateS >= dateP) {
-        // próximo é depois, para sem avançar
-        break;
-      }
-
-      // registra o secondary
-      setSimulationValueDataSec(prev => [...prev, parseFloat(candleS.closePrice)]);
-      setSimulationLabelDataSec(prev => [...prev, candleS.closeTime]);
-      setSimulationValueDataCompleteSec(prev => [...prev, candleS]);
-
-      // avança para o próximo
-      offsetRefSecondary += 1;
-    }
-
-    // agora, processa todos os key até <= dateP
-    while (true) {
-      if (isPausedKeyRef.current) {
-        console.log("⏸️ Pausado durante processamento do key. Retomando depois...");
-        simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
-        return;
-      }
-
-      let candleK = await fetchOne(epKey, offsetRefKey);
-      if (!candleK) {
-        break;
-      }
-
-      let dateK = candleK.closeTime.split(' ')[0];
-      if (dateK >= dateP) {
-        // próximo é depois, para sem avançar
-        break;
-      }
-
-      // registra o key
-      setSimulationValueDataKey(prev => [...prev, parseFloat(candleK.closePrice)]);
-      setSimulationLabelDataKey(prev => [...prev, candleK.closeTime]);
-      setSimulationValueDataCompleteKey(prev => [...prev, candleK]);
-
-      // avança para o próximo
-      offsetRefKey += 1;
-    }
-
-    // agora, processa todos os RSI até <= dateP
-    while (true) {
-      if (isPausedRsiRef.current) {
-        console.log("⏸️ Pausado durante processamento do RSI. Retomando depois...");
-        simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
-        return;
-      }
-
-      let candleRsi = await fetchOne(epRsi, offsetRefRsi);
-      if (!candleRsi) {
-        break;
-      }
-
-      let dateRsi = candleRsi.time.split(' ')[0];
-      if (dateRsi >= dateP) {
-        // próximo é depois, para sem avançar
-        break;
-      }
-
-      // registra RSI
-      const value = candleRsi.amrsi ?? candleRsi.rsi_ma ?? candleRsi.rsi;
-      setSimulationValueDataRsi(prev => [...prev, parseFloat(value)]);
-      setSimulationLabelDataRsi(prev => [...prev, candleRsi.time]);
-      setSimulationValueDataCompleteRsi(prev => [...prev, candleRsi]);
-
-      // avança para o próximo
-      offsetRefRsi += 1;
-    }
-
-    // agenda próxima iteração (próximo primary + catch-up)
-    simulationTimeoutSyncRef.current = setTimeout(() => {
-      simulateStepSync(symbolPrimary, symbolSecondary);
-    }, 300);
-
-  } catch (error) {
-    console.error("❌ Erro na simulateStepSync:", error);
+    // cancela timeout anterior (evita acumular)
     clearTimeout(simulationTimeoutSyncRef.current);
-  }
-};
+
+    try {
+      // helper para buscar 1 candle por endpoint/offset
+      const fetchOne = async (endpoint, offset) => {
+        const resp = await axios.get(`${endpoint}?offset=${offset}&limit=1`);
+        return (resp.data && resp.data.length) ? resp.data[0] : null;
+      };
+
+      // endpoints
+      const epPrimary = `${url}/api/simulate_price_atr`;
+      const epSecondary = `${url}/api/simulate_price_atr_sec`;
+      const epKey = `${url}/api/simulate_price_atr_key`;
+      const epRsi = `${url}/api/simulate_amrsi`;
+      const epPriceCurrent = `${url}/api/simulate_current_price`;
+
+
+      // checa pausa no primary antes de prosseguir
+      if (isPausedRef.current) {
+        console.log("⏸️ Simulação pausada (primary). Tentando novamente em 500ms...");
+        simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+        return;
+      }
+
+      // pega próximo candle do primary (driver)
+      let candleP = await fetchOne(epPrimary, offsetRefPrimary);
+      if (!candleP) {
+        console.log("✅ Simulação finalizada (primary terminou)");
+        return;
+      }
+
+      // data (somente parte data "YYYY-MM-DD" para sincronização por data)
+      let dateP = candleP.closeTime;
+
+      // registra o primary (use closeTime completo para label, para distinguir múltiplos)
+      setSimulationValueData(prev => [...prev, parseFloat(candleP.closePrice)]);
+      setSimulationLabelData(prev => [...prev, candleP.closeTime]);
+      setSimulationValueDataComplete(prev => [...prev, candleP]);
+
+      // avança o offset do primary para o próximo passo
+      offsetRefPrimary += 1;
+
+      // agora, processa todos os secondary até <= dateP
+      while (true) {
+        if (isPausedSecRef.current) {
+          console.log("⏸️ Pausado durante processamento do secondary. Retomando depois...");
+          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+          return;
+        }
+
+        let candleS = await fetchOne(epSecondary, offsetRefSecondary);
+        if (!candleS) {
+          break;
+        }
+
+        let dateS = candleS.closeTime;
+        if (dateS > dateP) {
+          // próximo é depois, para sem avançar
+          break;
+        }
+
+        // registra o secondary
+        setSimulationValueDataSec(prev => [...prev, parseFloat(candleS.closePrice)]);
+        setSimulationLabelDataSec(prev => [...prev, candleS.closeTime]);
+        setSimulationValueDataCompleteSec(prev => [...prev, candleS]);
+
+        // avança para o próximo
+        offsetRefSecondary += 1;
+      }
+
+      // agora, processa todos os key até <= dateP
+      while (true) {
+        if (isPausedKeyRef.current) {
+          console.log("⏸️ Pausado durante processamento do key. Retomando depois...");
+          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+          return;
+        }
+
+        let candleK = await fetchOne(epKey, offsetRefKey);
+
+        if (!candleK) {
+          break;
+        }
+
+        let dateK = candleK.closeTime;
+        if (dateK > dateP) {
+          // próximo é depois, para sem avançar
+          break;
+        }
+
+        // registra o key
+        setSimulationValueDataKey(prev => [...prev, parseFloat(candleK.closePrice)]);
+        setSimulationLabelDataKey(prev => [...prev, candleK.closeTime]);
+        setSimulationValueDataCompleteKey(prev => [...prev, candleK]);
+
+        // avança para o próximo
+        offsetRefKey += 1;
+      }
+
+      // agora, processa todos os RSI até <= dateP
+      while (true) {
+        if (isPausedRsiRef.current) {
+          console.log("⏸️ Pausado durante processamento do RSI. Retomando depois...");
+          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+          return;
+        }
+
+        let candleRsi = await fetchOne(epRsi, offsetRefRsi);
+        if (!candleRsi) {
+          break;
+        }
+
+        let dateRsi = candleRsi.time;
+        if (dateRsi > dateP) {
+          // próximo é depois, para sem avançar
+          break;
+        }
+
+        // registra RSI
+        const value = candleRsi.amrsi ?? candleRsi.rsi_ma ?? candleRsi.rsi;
+        setSimulationValueDataRsi(prev => [...prev, parseFloat(value)]);
+        setSimulationLabelDataRsi(prev => [...prev, candleRsi.time]);
+        setSimulationValueDataCompleteRsi(prev => [...prev, candleRsi]);
+
+        // avança para o próximo
+        offsetRefRsi += 1;
+      }
+
+      while (true) {
+        if (isPausedPriceRef.current) {
+          console.log("⏸️ Pausado durante processamento do secondary. Retomando depois...");
+          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+          return;
+        }
+
+        // pega próximo candle do preços completos atuais (driver)
+        let candlePc = await fetchOne(epPriceCurrent, offsetRefPrice);
+        if (!candlePc) {
+          console.log("✅ Simulação finalizada (preços completos terminou)");
+          return;
+        }
+
+
+        // data (somente parte data "YYYY-MM-DD" para sincronização por data)
+        let datePc = candlePc.time;
+        if (datePc > dateP) {
+          // próximo é depois, para sem avançar
+          break;
+        }
+
+
+        // registra o primary (use closeTime completo para label, para distinguir múltiplos)
+        setSimulationValueDataPrice(prev => [...prev, parseFloat(candlePc.close)]);
+        setSimulationLabelDataPrice(prev => [...prev, candlePc.time]);
+        setSimulationValueDataCompletePrice(prev => [...prev, candlePc]);
+
+        // avança o offset do primary para o próximo passo
+        offsetRefPrice += 1;
+      }
+
+
+      // agenda próxima iteração (próximo primary + catch-up)
+      simulationTimeoutSyncRef.current = setTimeout(() => {
+        simulateStepSync(symbolPrimary, symbolSecondary);
+      }, 300);
+
+    } catch (error) {
+      console.error("❌ Erro na simulateStepSync:", error);
+      clearTimeout(simulationTimeoutSyncRef.current);
+    }
+  };
 
   /*-----------------------------------------------------------------
     1️⃣ Função para Selecionae datas para simulação do ativo Primária
@@ -424,8 +476,8 @@ const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
       console.error("Erro na API para recuperar datas:", error);
     }
   }
-  console.log(daysSec);
-  
+
+
   /*#####################################################################
                            1️⃣💰FIM DA SIMULAÇÃO💰1️⃣
   ########################################################################*/
@@ -634,7 +686,6 @@ const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
   /*#####################################################################
                           🔑FIM ATIVO SECUNDÁRIO🔑
   ########################################################################*/
-
 
 
 
@@ -861,6 +912,297 @@ const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
   };
 
 
+
+
+  /*#####################################################################
+                        🎯logica de compra alta início🎯
+########################################################################*/
+
+  const buyVerify = useRef(false);
+  const sellVerify = useRef(false);
+
+  useEffect(() => {
+    // dados de classificação simulados 
+    const movements = simulationValueDataComplete;
+
+
+    // variaveis e constantes de controle
+    let naturalReaction = null;
+    let naturalRally = null;
+    let ultimoPivoRally = null;
+    let secReaction = null;
+
+
+
+
+    //1 identificar o ultimo topo de alta que deu origem a um movimento reação natural 
+    const identifyHighTop = (movements) => {
+      let ultimoTopoAlta = null;
+      let ultimoFundoBaixa = null;
+      let encontrouReacaoNatural = false;
+      let encontrouRallyNatural = false;
+      let encontrouReacaoSec = false;
+
+      for (let i = movements.length - 1; i >= 0; i--) {
+        const movement = movements[i];
+        const type = movement.tipo;
+
+
+        // Verificar se é uma Reação Natural (pode ser "Reação Natural (Alta)" ou "Reação Natural (fundo)")
+        if (type.includes('Reação Natural') && !encontrouReacaoNatural) {
+          naturalReaction = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          }
+          encontrouReacaoNatural = true;
+          setCurrentTrend('Reação Natural')
+          setRetestPoints([]) // reseta os pontos
+          continue;
+        }
+
+        // Verificar se é uma Reação secundária  (pode ser "Reação secundária (Alta)" ou "Reação secundária (fundo)")
+        if (type.includes('Reação secundária') && !encontrouReacaoSec) {
+          secReaction = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          }
+          encontrouReacaoSec = true;
+          setCurrentTrend('Reação secundária')
+          setRetestPoints([]) // reseta os pontos
+          continue;
+        }
+
+        // Quando já encontrou uma reação natural, procura o último topo de alta
+        if (encontrouReacaoNatural && type.includes('Tendência Alta')) {
+          setCurrentTrend('Tendência Alta')
+          ultimoTopoAlta = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          };
+          break;
+        }
+        // Quando já encontrou uma reação natural, procura o último fundo de baixa
+        if (encontrouReacaoNatural && type.includes('Tendência Baixa')) {
+          setCurrentTrend('Tendência Baixa')
+          ultimoFundoBaixa = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          };
+          break;
+        }
+        // Encontra o ultimo rally natural
+        if (!encontrouRallyNatural && type.includes('Rally Natural')) {
+          naturalRally = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          }
+          encontrouRallyNatural = true;
+          setRetestPoints([]) // reseta os pontos
+          continue;
+        }
+
+        // Quando já encontrou uma rally natural, procura o último fundo de reação natural
+        if (encontrouRallyNatural && type.includes('Reação Natural')) {
+          ultimoPivoRally = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          }
+          console.log("PivoRally :", ultimoPivoRally);
+          break;
+        }
+
+      }
+      return { ultimoTopoAlta, ultimoFundoBaixa, naturalRally };
+    };
+
+
+
+
+    const { ultimoTopoAlta, ultimoFundoBaixa } = identifyHighTop(movements);
+    let ultimoTopo = null;
+    let rally = null;
+
+
+    if (ultimoTopoAlta) {
+      ultimoTopo = ultimoTopoAlta
+    }
+
+    if (ultimoFundoBaixa) {
+      ultimoTopo = ultimoFundoBaixa
+    }
+
+    if (naturalRally) {
+      rally = naturalRally
+    }
+
+
+    // Verificar se é um novo topo (diferente do anterior)
+    if (ultimoTopo) {
+      const isNovoTopo = !ultimoTopoAnterior ||
+        ultimoTopo.closePrice !== ultimoTopoAnterior.closePrice ||
+        ultimoTopo.index !== ultimoTopoAnterior.index;
+
+      if (isNovoTopo) {
+        console.log('NOVO topo de alta identificado:', ultimoTopo);
+        // Atualiza array de penúltimos valores, acumulando
+        setPenultimoValor((prev) => [...prev, ultimoTopo]);
+
+        // Atualizar o estado com o novo topo
+        setUltimoTopoAnterior(ultimoTopo);
+      } else {
+        console.log('Topo já identificado anteriormente - ignorando repetição');
+      }
+    } else {
+      console.log('Nenhum topo de alta antecedendo reação natural foi encontrado');
+    }
+
+    const pivoAtual = penultimoValor[penultimoValor.length - 1];
+
+    //2 fazer a lógica de reteste proximo ao pivo anterior ao atual pivô ...[anterior,atual]
+    const pivo = penultimoValor[penultimoValor.length - 2];
+
+
+    if (pivo) {
+      const isNovoPivo = !ultimoPivoAnterior ||
+        pivo.closePrice !== ultimoPivoAnterior.closePrice ||
+        pivo.index !== ultimoPivoAnterior.index;
+
+      if (isNovoPivo) {
+        console.log("NOVO pivô Penultimo >:", pivo);
+        setUltimoPivoAnterior(pivo); // atualiza trava
+      } else {
+        console.log("Pivô repetido pivô Penultimo - ignorando >");
+      }
+    }
+
+    if (pivoAtual) {
+      const isNovoPivo = !ultimoPivoAtual ||
+        pivoAtual.closePrice !== ultimoPivoAtual.closePrice ||
+        pivoAtual.index !== ultimoPivoAtual.index;
+      if (isNovoPivo) {
+        console.log("NOVO pivô Atual >:", pivoAtual);
+      } else {
+        console.log("Pivô repetido pivô Atual - ignorando >");
+      }
+    }
+
+    //3 fazer a lógica de correção na varíavel pivo (se o preço estiver 
+    // vindo de um reação natural entra na banda de tolerancia e voltar a subir)
+    // ↕️↘️↗️RETESTE 
+    if (pivo) {
+      const atr = pivo.atr
+      const tolerance = atr / 3;
+      const high = pivo.closePrice + tolerance;
+      const low = pivo.closePrice - tolerance;
+      const buyPoint = pivo.closePrice + atr / 2;
+      const sellPoint = pivo.closePrice - atr / 2;
+
+      // 🟢 Confirmação de compra executada
+      if (
+        naturalReaction &&
+        ultimoTopoAlta &&
+        naturalReaction.closePrice >= low &&
+        naturalReaction.closePrice <= high
+      ) {
+        setRetestPoints([
+          { name: "high", value: high },
+          { name: "low", value: low },
+          { name: "pivo", value: pivo },
+          { name: "naturalReaction", value: naturalReaction },
+          { name: "buy", value: buyPoint },
+          { name: "Stop Buy", value: sellPoint }
+        ]);
+        buyVerify.current = true;
+      }
+      // 🔴 Confirmação de venda executada
+      if (
+        naturalReaction &&
+        ultimoFundoBaixa &&
+        naturalReaction.closePrice >= low &&
+        naturalReaction.closePrice <= high
+      ) {
+        setRetestPoints([
+          { name: "high", value: high },
+          { name: "low", value: low },
+          { name: "pivo", value: pivo },
+          { name: "naturalReaction", value: naturalReaction },
+          { name: "sell", value: sellPoint },
+          { name: "stop sell", value: buyPoint }
+        ]);
+      }
+      sellVerify.current = true;
+    };
+
+    //🟢 🔚saída das operações no suporte caso reagir alguns pontos abaixo em posição de comprar
+    if (pivoAtual) {
+      const atr = pivoAtual.atr;
+      const tolerance = atr / 4;
+      const highExit = pivoAtual.closePrice + tolerance;
+      const lowExit = pivoAtual.closePrice - tolerance;
+      const sellExit = pivoAtual.closePrice - atr / 2;
+      const buyExit = pivoAtual.closePrice + atr / 2;
+
+      if (
+        naturalRally &&
+        currentTrend === "Tendência Alta" &&
+        buyVerify.current &&
+        naturalRally.closePrice >= lowExit &&
+        naturalRally.closePrice <= highExit
+      ) {
+        setRetestPoints([
+          { name: "high", value: highExit },
+          { name: "low", value: lowExit },
+          { name: "pivoAtual", value: pivoAtual },
+          { name: "naturalRally", value: naturalRally },
+          { name: "sell Stop", value: sellExit },
+        ]);
+        buyVerify.current = false;
+      }
+      // 🔴 🔚saída das operações no suporte caso reagir alguns pontos acima em posição de venda
+      if (
+        naturalRally &&
+        currentTrend === "Tendência Baixa" &&
+        sellVerify.current &&
+        naturalRally.closePrice >= lowExit &&
+        naturalRally.closePrice <= highExit
+      ) {
+        setRetestPoints([
+          { name: "high", value: highExit },
+          { name: "low", value: lowExit },
+          { name: "pivoAtual", value: pivoAtual },
+          { name: "naturalRally", value: naturalRally },
+          { name: "buy Stop", value: buyExit },
+        ]);
+        sellVerify.current = false;
+      }
+    }
+
+
+
+  }, [simulationValueDataComplete]);
+  console.log("Compra ou venda", retestPoints);
+
+
+
+
   useEffect(() => {
     if (realTime === "real") {
       clearTimeout(simulationTimeoutRef.current);
@@ -911,6 +1253,7 @@ const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
             handleGetPointsKey(),
             getDateSimulation(),
             getDateSimulationSec(),
+
           ], [savedSymbol, savedSymbolSec]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
@@ -1028,9 +1371,7 @@ const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
     rsi,
     rsiTime,
     simulationValueDataRsi,
-    simulationLabelDataRsi
-
-
+    simulationLabelDataRsi,
   };
 
   return (
