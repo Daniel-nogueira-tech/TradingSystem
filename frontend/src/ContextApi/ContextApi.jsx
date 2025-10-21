@@ -108,6 +108,8 @@ const ContextApi = (props) => {
   const [ultimoPivoAnterior, setUltimoPivoAnterior] = useState(null);
   const [ultimoPivoAtual, setultimoPivoAtual] = useState(null);
   const [penultimoValor, setPenultimoValor] = useState([]);
+  const [rallyPivot, setRallyPivot] = useState([]);
+  const [ultimoPivoAnteriorRally, setUltimoPivoAnteriorRally] = useState(null);
   const [retestPoints, setRetestPoints] = useState([]);
   const [currentTrend, setCurrentTrend] = useState("");
 
@@ -929,9 +931,7 @@ const ContextApi = (props) => {
     // variaveis e constantes de controle
     let naturalReaction = null;
     let naturalRally = null;
-    let ultimoPivoRally = null;
     let secReaction = null;
-
 
 
 
@@ -942,6 +942,7 @@ const ContextApi = (props) => {
       let encontrouReacaoNatural = false;
       let encontrouRallyNatural = false;
       let encontrouReacaoSec = false;
+      let ultimoPivoRally = false;
 
       for (let i = movements.length - 1; i >= 0; i--) {
         const movement = movements[i];
@@ -958,7 +959,6 @@ const ContextApi = (props) => {
             index: i
           }
           encontrouReacaoNatural = true;
-          setCurrentTrend('Reação Natural')
           setRetestPoints([]) // reseta os pontos
           continue;
         }
@@ -1004,6 +1004,7 @@ const ContextApi = (props) => {
         }
         // Encontra o ultimo rally natural
         if (!encontrouRallyNatural && type.includes('Rally Natural')) {
+
           naturalRally = {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
@@ -1016,7 +1017,6 @@ const ContextApi = (props) => {
           continue;
         }
 
-        // Quando já encontrou uma rally natural, procura o último fundo de reação natural
         if (encontrouRallyNatural && type.includes('Reação Natural')) {
           ultimoPivoRally = {
             closePrice: movement.closePrice,
@@ -1024,34 +1024,34 @@ const ContextApi = (props) => {
             tipo: movement.tipo,
             atr: movement.atr,
             index: i
-          }
-          console.log("PivoRally :", ultimoPivoRally);
+          };
+          console.log("✅ PivoRally encontrado:", ultimoPivoRally);
           break;
         }
-
       }
-      return { ultimoTopoAlta, ultimoFundoBaixa, naturalRally };
+
+      return { ultimoTopoAlta, ultimoFundoBaixa, naturalRally, ultimoPivoRally };
     };
+    const { ultimoTopoAlta, ultimoFundoBaixa, ultimoPivoRally } = identifyHighTop(movements);
 
-
-
-
-    const { ultimoTopoAlta, ultimoFundoBaixa } = identifyHighTop(movements);
     let ultimoTopo = null;
     let rally = null;
+    let rallyEncontrado = null;
 
 
     if (ultimoTopoAlta) {
       ultimoTopo = ultimoTopoAlta
     }
-
     if (ultimoFundoBaixa) {
       ultimoTopo = ultimoFundoBaixa
     }
-
     if (naturalRally) {
       rally = naturalRally
     }
+    if (ultimoPivoRally) {
+      rallyEncontrado = ultimoPivoRally
+    }
+
 
 
     // Verificar se é um novo topo (diferente do anterior)
@@ -1059,12 +1059,10 @@ const ContextApi = (props) => {
       const isNovoTopo = !ultimoTopoAnterior ||
         ultimoTopo.closePrice !== ultimoTopoAnterior.closePrice ||
         ultimoTopo.index !== ultimoTopoAnterior.index;
-
       if (isNovoTopo) {
         console.log('NOVO topo de alta identificado:', ultimoTopo);
         // Atualiza array de penúltimos valores, acumulando
         setPenultimoValor((prev) => [...prev, ultimoTopo]);
-
         // Atualizar o estado com o novo topo
         setUltimoTopoAnterior(ultimoTopo);
       } else {
@@ -1074,10 +1072,33 @@ const ContextApi = (props) => {
       console.log('Nenhum topo de alta antecedendo reação natural foi encontrado');
     }
 
-    const pivoAtual = penultimoValor[penultimoValor.length - 1];
+
+
+
+    // Verificar se é um novo pivo que deu origem rally(diferente do anterior)
+    if (rallyEncontrado) {
+      const isNovoRally = !ultimoPivoAnteriorRally ||
+        rallyEncontrado.closePrice !== ultimoPivoAnteriorRally.closePrice ||
+        rallyEncontrado.index !== ultimoPivoAnteriorRally.index;
+      if (isNovoRally) {
+        console.log('NOVO topo de alta identificado:', ultimoTopo);
+        // Atualiza array de penúltimos valores, acumulando
+        setRallyPivot((prev) => [...prev, rallyEncontrado]);
+        // Atualizar o estado com o novo topo
+        setUltimoPivoAnteriorRally(isNovoRally);
+      }
+    }
+
+    // reteste de pivo para saída
+    const TrendPivot = penultimoValor[penultimoValor.length - 1];
 
     //2 fazer a lógica de reteste proximo ao pivo anterior ao atual pivô ...[anterior,atual]
     const pivo = penultimoValor[penultimoValor.length - 2];
+
+    // reteste de pivo de rally
+    const pivoRally = rallyPivot[rallyPivot.length - 1];
+
+
 
 
     if (pivo) {
@@ -1093,12 +1114,12 @@ const ContextApi = (props) => {
       }
     }
 
-    if (pivoAtual) {
+    if (TrendPivot) {
       const isNovoPivo = !ultimoPivoAtual ||
-        pivoAtual.closePrice !== ultimoPivoAtual.closePrice ||
-        pivoAtual.index !== ultimoPivoAtual.index;
+        TrendPivot.closePrice !== ultimoPivoAtual.closePrice ||
+        TrendPivot.index !== ultimoPivoAtual.index;
       if (isNovoPivo) {
-        console.log("NOVO pivô Atual >:", pivoAtual);
+        console.log("NOVO pivô Atual >:", TrendPivot);
       } else {
         console.log("Pivô repetido pivô Atual - ignorando >");
       }
@@ -1114,6 +1135,7 @@ const ContextApi = (props) => {
       const low = pivo.closePrice - tolerance;
       const buyPoint = pivo.closePrice + atr / 2;
       const sellPoint = pivo.closePrice - atr / 2;
+
 
       // 🟢 Confirmação de compra executada
       if (
@@ -1149,53 +1171,158 @@ const ContextApi = (props) => {
         ]);
       }
       sellVerify.current = true;
+
+      ////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+      //🟢 🔚saída das operações no suporte caso reagir alguns pontos abaixo em posição de comprar
+      if (TrendPivot) {
+        const atr = TrendPivot.atr;
+        const tolerance = atr / 4;
+        const highExit = TrendPivot.closePrice + tolerance;
+        const lowExit = TrendPivot.closePrice - tolerance;
+        const sellExit = TrendPivot.closePrice - atr / 2;
+        const buyExit = TrendPivot.closePrice + atr / 2;
+
+        if (
+          naturalRally &&
+          currentTrend === "Tendência Alta" &&
+          buyVerify.current &&
+          naturalRally.closePrice >= lowExit &&
+          naturalRally.closePrice <= highExit
+        ) {
+          setRetestPoints([
+            { name: "high", value: highExit },
+            { name: "low", value: lowExit },
+            { name: "last trend pivot", value: TrendPivot },
+            { name: "naturalRally", value: naturalRally },
+            { name: "sell Stop", value: sellExit },
+          ]);
+          buyVerify.current = false;
+        }
+        // 🔴 🔚saída das operações no suporte caso reagir alguns pontos acima em posição de venda
+        if (
+          naturalRally &&
+          currentTrend === "Tendência Baixa" &&
+          sellVerify.current &&
+          naturalRally.closePrice >= lowExit &&
+          naturalRally.closePrice <= highExit
+        ) {
+          setRetestPoints([
+            { name: "high", value: highExit },
+            { name: "low", value: lowExit },
+            { name: "last trend pivot", value: TrendPivot },
+            { name: "naturalRally", value: naturalRally },
+            { name: "buy Stop", value: buyExit },
+          ]);
+          sellVerify.current = false;
+        }
+      }
+
+      //////////////////////////////////////////////////////////////////////////////////////////////////
     };
 
-    //🟢 🔚saída das operações no suporte caso reagir alguns pontos abaixo em posição de comprar
-    if (pivoAtual) {
-      const atr = pivoAtual.atr;
+
+    // 4) reteste no ultimo pivô (reteste rally)
+    if (pivoRally) {
+      const atr = pivoRally.atr;
       const tolerance = atr / 4;
-      const highExit = pivoAtual.closePrice + tolerance;
-      const lowExit = pivoAtual.closePrice - tolerance;
-      const sellExit = pivoAtual.closePrice - atr / 2;
-      const buyExit = pivoAtual.closePrice + atr / 2;
+      const high = pivoRally.closePrice + tolerance;
+      const low = pivoRally.closePrice - tolerance;
+      const buyPoint = pivoRally.closePrice + atr / 2;
+      const sellPoint = pivoRally.closePrice - atr / 2;
 
+      console.log("pivoRally>", pivoRally);
+      console.log("high >", high);
+      console.log("low >", low);
+      console.log("naturalReaction >", naturalReaction);
+      console.log("currentTrend >", currentTrend);
+
+      // 🟢 Confirmação de compra executada (reteste rally)
       if (
-        naturalRally &&
+        naturalReaction &&
         currentTrend === "Tendência Alta" &&
-        buyVerify.current &&
-        naturalRally.closePrice >= lowExit &&
-        naturalRally.closePrice <= highExit
+        naturalReaction.closePrice >= low &&
+        naturalReaction.closePrice <= high
       ) {
         setRetestPoints([
-          { name: "high", value: highExit },
-          { name: "low", value: lowExit },
-          { name: "pivoAtual", value: pivoAtual },
-          { name: "naturalRally", value: naturalRally },
-          { name: "sell Stop", value: sellExit },
+          { name: "pivo Rally", value: pivoRally },
+          { name: "natural Reaction", value: naturalReaction },
+          { name: "buy", value: buyPoint },
+          { name: "Stop Buy - retest rally", value: sellPoint }
         ]);
-        buyVerify.current = false;
+        buyVerify.current = true;
       }
-      // 🔴 🔚saída das operações no suporte caso reagir alguns pontos acima em posição de venda
+
+
+      // 🔴 Reteste de venda (reteste rally)
       if (
-        naturalRally &&
+        naturalReaction &&
         currentTrend === "Tendência Baixa" &&
-        sellVerify.current &&
-        naturalRally.closePrice >= lowExit &&
-        naturalRally.closePrice <= highExit
+        naturalReaction.closePrice >= low &&
+        naturalReaction.closePrice <= high
       ) {
         setRetestPoints([
-          { name: "high", value: highExit },
-          { name: "low", value: lowExit },
-          { name: "pivoAtual", value: pivoAtual },
-          { name: "naturalRally", value: naturalRally },
-          { name: "buy Stop", value: buyExit },
+          { name: "pivo Rally Baixa", value: pivoRally },
+          { name: "natural Reaction", value: naturalReaction },
+          { name: "Sell", value: sellPoint },
+          { name: "Stop Sell - retest rally", value: buyPoint },
         ]);
-        sellVerify.current = false;
+        sellVerify.current = true;
       }
-    }
 
 
+      ///////////////////////////////////////////////////////////////////////////////////
+      // saída 
+      if (TrendPivot) {
+        const atr = TrendPivot.atr;
+        const tolerance = atr / 3;
+        const highExit = TrendPivot.closePrice + tolerance;
+        const lowExit = TrendPivot.closePrice - tolerance;
+        const sellExit = TrendPivot.closePrice - atr / 2;
+        const buyExit = TrendPivot.closePrice + atr / 2;
+
+        // 🟢 🔚saída (reteste rally)
+        if (
+          naturalRally &&
+          buyVerify.current &&
+          currentTrend === "Tendência Alta" &&
+          naturalRally.closePrice <= highExit &&
+          naturalRally.closePrice >= lowExit
+        ) {
+          setRetestPoints([
+            { name: "high", value: highExit },
+            { name: "low", value: lowExit },
+            { name: "currentTrend", value: currentTrend },
+            { name: "last trend pivot", value: TrendPivot },
+            { name: "naturalRally", value: naturalRally },
+            { name: "Sell Stop Exit", value: sellExit },
+          ]);
+          buyVerify.current === false;
+        }
+
+
+        // 🔴 🔚 saída (reteste rally) /// VER se esta FUNCIONADI a SAIDA
+        if (
+          naturalRally &&
+          sellVerify.current &&
+          currentTrend === "Tendência Baixa" &&
+          naturalRally.closePrice <= highExit &&
+          naturalRally.closePrice >= lowExit
+        ) {
+          setRetestPoints([
+            { name: "high", value: highExit },
+            { name: "low", value: lowExit },
+            { name: "currentTrend", value: currentTrend },
+            { name: "last trend pivot", value: TrendPivot },
+            { name: "naturalRally", value: naturalRally },
+            { name: "buy Stop Exit", value: buyExit },
+          ]);
+          sellVerify.current === false;
+        }
+
+      }
+
+    };
 
   }, [simulationValueDataComplete]);
   console.log("Compra ou venda", retestPoints);

@@ -1037,7 +1037,7 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
-                """elif (
+                elif (
                     not movimento_adicionado
                     and ultimo_pivot_baixa is not None
                     and preco < ultimo_pivot_baixa - confirmar
@@ -1058,7 +1058,7 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
-                """
+
             elif tendencia_atual == "Baixa":
                 # Vindo de tendência baixa
                 if not movimento_adicionado and preco > topo:
@@ -1161,7 +1161,7 @@ def filter_price_atr():
                     )
                     movimento_adicionado = True
 
-                """elif (
+                elif (
                     not movimento_adicionado
                     and ultimo_pivot_alta is not None
                     and preco > ultimo_pivot_alta + confirmar
@@ -1180,7 +1180,7 @@ def filter_price_atr():
                         }
                     )
                     movimento_adicionado = True
-"""
+
         # === RALLY NATURAL ===
         elif estado == "rally_natural":
             if tendencia_atual == "Alta":
