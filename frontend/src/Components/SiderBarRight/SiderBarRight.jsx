@@ -56,6 +56,7 @@ const SiderBarRight = () => {
                 type="number"
                 step="0.01"
                 min="0.01"
+                max="0.05"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
             />

@@ -200,7 +200,7 @@ const Graphics = () => {
   }, [linhasKey, currentPageKey])
 
 
-// Ativa as botas de pivô
+  // Ativa as botas de pivô
   const handleClick = (key, value) => {
     setActiveStates((prev) => ({
       ...prev,
@@ -221,22 +221,22 @@ const Graphics = () => {
   return (
     <div className='graphics-main' >
       <div className='time-frame'>
-
         <div className='time-container'>
-          <button
 
+          <button
+            className={`button-time ${activeButton === '15m'
+              ? 'active'
+              : ''}`}
+
+            onClick={() => handleClickTime('15m')}
+          >15M</button>
+
+          <button
             className={`button-time ${activeButton === '1h'
               ? 'active'
               : ''}`}
             onClick={() => handleClickTime('1h')}
-          >1h</button>
-          <button
-            className={`button-time ${activeButton === '4h'
-              ? 'active'
-              : ''}`}
-
-            onClick={() => handleClickTime('4h')}
-          >4h</button>
+          >1H</button>
 
           <button
             className={`button-time ${activeButton === '1d'
@@ -254,8 +254,8 @@ const Graphics = () => {
           >
             🔄 Atualizar
           </button>
-        </div>
 
+        </div>
       </div>
 
       <div className='graphics'>
