@@ -12,13 +12,13 @@ import {
     Legend,
     LogarithmicScale,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2'; // 👈 gráfico de barra agora
+import { Bar } from 'react-chartjs-2'; 
 import { AppContext } from '../../ContextApi/ContextApi';
 import { useEffect } from 'react';
 import Swal from 'sweetalert2';
 
 ChartJS.register(
-    BarElement, // 👈 necessário para barras
+    BarElement, 
     CategoryScale,
     LinearScale,
     Title,
@@ -81,8 +81,8 @@ const ChartBar = () => {
     const backgroundColor = activeValue.map((valor, index) => {
         if (index === 0) return 'rgba(113, 113, 113, 0.6)';
         return valor >= activeValue[index - 1]
-            ? 'rgba(0, 200, 0, 0.4)'
-            : 'rgba(200, 0, 0, 0.4)';
+            ? 'rgba(0, 255, 0, 0.44)'
+            : 'rgba(255, 0, 0, 0.42)';
     });
 
 
@@ -285,7 +285,7 @@ const ChartBar = () => {
                 beginAtZero: false,
                 type: 'linear',
                 suggestedMin: Math.min(...activeValue) * 0.98,
-                suggestedMax: Math.max(...activeValue) * 1.02,
+                suggestedMax: Math.max(...activeValue) * 0.102,
             },
         },
     };

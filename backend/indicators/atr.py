@@ -1,5 +1,5 @@
-def calcular_atr_movel(dados, periodo=14):
-    if len(dados) < periodo + 1:
+def calcular_atr_movel(dados, periodo=None):
+    if len(dados) < periodo + 30:
         print("Poucos dados para calcular ATR móvel.")
         return []
 
@@ -19,7 +19,7 @@ def calcular_atr_movel(dados, periodo=14):
     return atrs
 
 
-def suavizar_atr(atrs, periodo=180):
+def suavizar_atr(atrs, periodo=None):
     if len(atrs) < periodo:
         return []
 

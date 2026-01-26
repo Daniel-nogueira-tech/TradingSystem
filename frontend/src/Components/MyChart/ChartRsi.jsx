@@ -9,9 +9,11 @@ import {
     Legend,
     Filler,
 } from 'chart.js';
+import zoomPlugin from 'chartjs-plugin-zoom';
 import { Line } from 'react-chartjs-2';
 import { AppContext } from '../../ContextApi/ContextApi';
 import { useContext } from 'react';
+import { useRef } from 'react';
 
 // Registrar os componentes no Chart.js
 ChartJS.register(
@@ -22,7 +24,8 @@ ChartJS.register(
     Title,
     Tooltip,
     Legend,
-    Filler
+    Filler,
+    zoomPlugin,
 );
 
 
@@ -30,21 +33,38 @@ ChartJS.register(
 
 const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
     const { rsi, rsiTime, simulationValueDataRsi, simulationLabelDataRsi } = useContext(AppContext);
+    const chartRef = useRef();
 
-   
-    const value = rsi;
-    const label = rsiTime;
 
-    const getPointColor = (v) => {
-        if (v <= 20) return 'rgba(255, 0, 0, 1)';
-        if (v >= 80) return 'rgba(255, 0, 0, 1)';
-        return 'rgba(0, 255, 8, 1)';
+    const handleZoomIn = () => {
+        if (chartRef.current) chartRef.current.zoom(1.2);
     };
+
+    const handleZoomOut = () => {
+        if (chartRef.current) chartRef.current.zoom(0.8);
+    };
+
+    const handleResetZoom = () => {
+        if (chartRef.current) chartRef.current.resetZoom();
+    };
+
+
+    const value = rsi;
+    const label = rsiTime.map(time =>
+        new Date(time).toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+        })
+    );
+
+
 
     const activeValue = simulationValueDataRsi?.length > 0 ? simulationValueDataRsi : value;
     const activeLabel = simulationLabelDataRsi?.length > 0 ? simulationLabelDataRsi : label;
 
- 
+
 
     const data = {
         labels: activeLabel,
@@ -171,20 +191,56 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
             },
             title: {
                 display: true,
-                text: 'Media aritmética de índice de força relativa.',
+                text: 'AMRSI (arithmetic mean of relative strength index)',
+            },
+            zoom: {
+                pan: {
+                    enabled: true,
+                    mode: 'xy',
+                    modifierKey: 'ctrl',
+                },
+                zoom: {
+                    wheel: {
+                        enabled: true,
+                        modifierKey: 'shift',
+                        speed: 0.1,
+                    },
+                    drag: {
+                        enabled: true,
+                        borderColor: 'rgba(225,225,225,0.3)',
+                        borderWidth: 1,
+                        backgroundColor: 'rgba(225,225,225,0.1)',
+                    },
+                    pinch: {
+                        enabled: true,
+                    },
+                    mode: 'xy',
+                },
+                limits: {
+                    x: { min: 'original', max: 'original' },
+                    y: { min: 'original', max: 'original' },
+                },
             },
         },
         scales: {
             y: {
                 beginAtZero: true,
+                type: 'linear',
+                suggestedMin: Math.min(...activeLabel) * 0.98,
+                suggestedMax: Math.max(...activeLabel) * 0.102,
             },
         },
     };
     return (
         <div style={{ width: '100%', height: '350px', margin: '10 auto', fontSize: '10px', padding: '15px' }}>
+            <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>
+            <button className='btn-zoom' onClick={handleZoomOut}>Zoom -</button>
+            <button className='btn-zoom' onClick={handleResetZoom}>Reset</button>
+
             {selectedDateStart && <p>De : {selectedDateStart} </p>}
             {selectedDateEnd && <p>Até a : {selectedDateEnd}</p>}
-            <Line data={data} options={options} />
+
+            <Line ref={chartRef} data={data} options={options} plugins={[zoomPlugin]} />
         </div>
     );
 };

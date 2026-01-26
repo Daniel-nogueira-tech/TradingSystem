@@ -21,7 +21,7 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler // esse é essencial para o fill funcionar
+  Filler 
 );
 
 const ChartPerformance = ({ selectedDateStart,selectedDateEnd }) => {
@@ -66,7 +66,7 @@ const ChartPerformance = ({ selectedDateStart,selectedDateEnd }) => {
           const zeroY = y.getPixelForValue(0);
           const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
 
-          // Corrigir aqui também:
+
           let zeroRatio = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
           zeroRatio = Math.max(0, Math.min(1, zeroRatio));
 

@@ -83,8 +83,9 @@ th {
   height: 100%;
   min-width: 710px;
   padding-bottom: 20px;
-  display: flex;
-  justify-content: center;
+  padding-left: 10px;
+  padding-right: 10px;
+
   gap: 10px;
   text-align: center;
   border: 1px solid var(--background-card-2);
@@ -92,19 +93,7 @@ th {
   animation: fadeIns 1s ease;
 }
 
-.table {
-  width: 100%;
-}
 
-.table-container-key {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  align-items: center;
-  border: 1px solid var(--background-card-2);
-  background: var(--background);
-  animation: fadeIns 1s ease;
-}
 
 .time-frame {
   display: flex;

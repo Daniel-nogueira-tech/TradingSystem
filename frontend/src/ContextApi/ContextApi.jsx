@@ -18,26 +18,19 @@ const ContextApi = (props) => {
   const [values, setValues] = useState([]);
   const [labels, setLabels] = useState([]);
   const [dadosPrice, setDadosPrice] = useState([]);
-  const [valuesSecondary, setValuesSecondary] = useState([]);
-  const [labelsSecondary, setLabelsSecondary] = useState([]);
-  const [dadosPriceSecondary, setDadosPriceSecondary] = useState([]);
-  const [dadosPriceKey, setDadosPriceKey] = useState([]);
-  const [labelsKey, setLabelsKey] = useState([]);
-  const [valuesKey, setValueKey] = useState([]);
   const inputRefMain = useRef(null);
-  const inputRefSec = useRef(null);
   const [symbol, setSymbol] = useState("");
-  const [symbolSec, setSymbolSec] = useState("");
   const toast = useRef(null);
   const [activeButton, setActiveButton] = useState('');
   const [importantPoints, setImportantPoints] = useState([]);
   const [selectedPivots, setSelectedPivots] = useState([]);
-  const [importantPointsKey, setImportantPointsKey] = useState([]);
-  const [selectedPivotsKey, setSelectedPivotsKey] = useState([]);
   const [realTime, setRealTime] = useState("");
   const modo = realTime;
   const [rsi, setRsi] = useState([]);
   const [rsiTime, setRsiTime] = useState([]);
+  const [vppr, setVppr] = useState([]);
+  const [vpprTime, setVpprTime] = useState([]);
+  const [vpprEma, setVpprEma] = useState([]);
 
 
   const [dateSimulationStart, setDateSimulationStart] = useState("")
@@ -46,30 +39,19 @@ const ContextApi = (props) => {
   const [showDaysInput, setShowDaysInput] = useState(false);
   const [daysValue, setDaysValue] = useState('');
 
-  const [dateSimulationStartSec, setDateSimulationStartSec] = useState("")
-  const [dateSimulationEndSec, setDateSimulationEndSec] = useState("")
-  const [daysSec, setDaysSec] = useState('')
-  const [showDaysInputSec, setShowDaysInputSec] = useState(false);
-  const [daysValueSec, setDaysValueSec] = useState('');
-
+  /*Variaveis para atualizar graficos*/
   const [simulationLabelData, setSimulationLabelData] = useState([]);
   const [simulationValueData, setSimulationValueData] = useState([]);
-  const [simulationLabelDataSec, setSimulationLabelDataSec] = useState([]);
-  const [simulationValueDataSec, setSimulationValueDataSec] = useState([]);
-  const [simulationLabelDataKey, setSimulationLabelDataKey] = useState([]);
-  const [simulationValueDataKey, setSimulationValueDataKey] = useState([]);
   const [simulationLabelDataRsi, setSimulationLabelDataRsi] = useState([]);
   const [simulationValueDataRsi, setSimulationValueDataRsi] = useState([]);
-  const [simulationLabelDataPrice, setSimulationLabelDataPrice] = useState([]);
-  const [simulationValueDataPrice, setSimulationValueDataPrice] = useState([]);
+  const [simulationLabelDataVppr, setSimulationLabelDataVppr] = useState([]);
+  const [simulationValueDataVppr, setSimulationValueDataVppr] = useState([]);
+  const [simulationValueDataVpprEma, setSimulationValueDataVpprEma] = useState([]);
 
 
   const [simulationValueDataComplete, setSimulationValueDataComplete] = useState([]);
-  const [simulationValueDataCompleteSec, setSimulationValueDataCompleteSec] = useState([]);
-  const [simulationValueDataCompleteKey, setSimulationValueDataCompleteKey] = useState([]);
   const [simulationValueDataCompleteRsi, setSimulationValueDataCompleteRsi] = useState([]);
-  const [simulationValueDataCompletePrice, setSimulationValueDataCompletePrice] = useState([]);
-
+  const [simulationValueDataCompleteVppr, setSimulationValueDataCompleteVppr] = useState([]);
 
 
 
@@ -78,28 +60,25 @@ const ContextApi = (props) => {
   const isPausedRef = useRef(isPaused);
 
 
-  const simulationSecTimeoutRef = useRef(null);
-  const [isPausedSec, setIsPausedSec] = useState(false);
-  const isPausedSecRef = useRef(isPausedSec);
-
   const simulationTimeoutSyncRef = useRef(null);
-  const [isPausedKey, setIsPausedKey] = useState(false)
-  const isPausedKeyRef = useRef(isPausedKey);
+
 
   const simulationRsiTimeoutRef = useRef(null);
   const [isPausedRsi, setIsPausedRsi] = useState(false);
   const isPausedRsiRef = useRef(isPausedRsi);
 
-  const [isPausedPrice, setIsPausedPrice] = useState(false);
-  const isPausedPriceRef = useRef(isPausedPrice)
+
+  const simulationVpprTimeoutRef = useRef(null);
+  const [isPausedVppr, setIsPausedVppr] = useState(false);
+  const isPausedVpprRef = useRef(isPausedVppr);
+
 
   const toastShownRef = useRef(false);
 
   let offsetRefPrimary = 0;
-  let offsetRefSecondary = 0;
-  let offsetRefKey = 0;
   let offsetRefRsi = 0;
-  let offsetRefPrice = 0;
+  let offsetRefVppr = 0;
+
 
   const period = 14; /* periodo do AMRSI */
 
@@ -108,12 +87,12 @@ const ContextApi = (props) => {
   /*-----------------------------------------------
   Função para alternar entre simulação e real time 
   --------------------------------------------------*/
-  const LoadGraphicDataOne = async (savedSymbol, savedSymbolSec) => {
+
+  const LoadGraphicDataOne = async (savedSymbol) => {
     if (realTime === "real") {
       await graphicDataOne(savedSymbol);
-      await graphicDataKey();
-      await graphicDataSecondary(savedSymbolSec);
-      await getRsi(savedSymbol)
+      await getRsi(savedSymbol);
+      await getVppr(savedSymbol);
 
       if (!toastShownRef.current) {
         toast.current.show({
@@ -127,6 +106,7 @@ const ContextApi = (props) => {
     }
     else if (realTime === "simulation") {
       await getRsi();
+      await getVppr()
       await simulateStepSync(savedSymbol);
       toast.current.show({
         severity: "success",
@@ -163,178 +143,133 @@ const ContextApi = (props) => {
   /*---------------------------------------------
     Função para simulação pega os dados fatiados
    -----------------------------------------------*/
-  const simulateStepSync = async (symbolPrimary, symbolSecondary) => {
+
+  const simulateStepSync = async (symbolPrimary) => {
     // se não estiver em modo simulation, cancela
     if (realTime !== 'simulation' && dateSimulationStart !== 'Nada') {
       console.log("🛑 Simulação cancelada: modo não é 'simulation'");
       return;
     }
 
-    // cancela timeout anterior (evita acumular)
+    // cancela timeout anterior
     clearTimeout(simulationTimeoutSyncRef.current);
 
     try {
-      // helper para buscar 1 candle por endpoint/offset
       const fetchOne = async (endpoint, offset) => {
         const resp = await axios.get(`${endpoint}?offset=${offset}&limit=1`);
         return (resp.data && resp.data.length) ? resp.data[0] : null;
       };
 
-      // endpoints
+      // endpoints mantidos
       const epPrimary = `${url}/api/simulate_price_atr`;
-      const epSecondary = `${url}/api/simulate_price_atr_sec`;
-      const epKey = `${url}/api/simulate_price_atr_key`;
       const epRsi = `${url}/api/simulate_amrsi`;
-      const epPriceCurrent = `${url}/api/simulate_current_price`;
+      const epVppr = `${url}/api/simulate_vppr`;
 
 
-      // checa pausa no primary antes de prosseguir
+      // pausa global do primary
       if (isPausedRef.current) {
-        console.log("⏸️ Simulação pausada (primary). Tentando novamente em 500ms...");
-        simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+        simulationTimeoutSyncRef.current = setTimeout(
+          () => simulateStepSync(symbolPrimary),
+          500
+        );
         return;
       }
 
-      // pega próximo candle do primary (driver)
+      // 🔹 PRIMARY (driver do tempo)
       let candleP = await fetchOne(epPrimary, offsetRefPrimary);
+      console.log("epPrimary ", candleP);
       if (!candleP) {
         console.log("✅ Simulação finalizada (primary terminou)");
         return;
       }
 
-      // data (somente parte data "YYYY-MM-DD" para sincronização por data)
-      let dateP = candleP.closeTime;
+      const dateP = candleP.closeTime;
+      const tp = new Date(dateP).getTime();
 
-      // registra o primary (use closeTime completo para label, para distinguir múltiplos)
       setSimulationValueData(prev => [...prev, parseFloat(candleP.closePrice)]);
       setSimulationLabelData(prev => [...prev, candleP.closeTime]);
       setSimulationValueDataComplete(prev => [...prev, candleP]);
 
-      // avança o offset do primary para o próximo passo
       offsetRefPrimary += 1;
 
-      // agora, processa todos os secondary até <= dateP
-      while (true) {
-        if (isPausedSecRef.current) {
-          console.log("⏸️ Pausado durante processamento do secondary. Retomando depois...");
-          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
-          return;
-        }
-
-        let candleS = await fetchOne(epSecondary, offsetRefSecondary);
-        if (!candleS) {
-          break;
-        }
-
-        let dateS = candleS.closeTime;
-        if (dateS > dateP) {
-          // próximo é depois, para sem avançar
-          break;
-        }
-
-        // registra o secondary
-        setSimulationValueDataSec(prev => [...prev, parseFloat(candleS.closePrice)]);
-        setSimulationLabelDataSec(prev => [...prev, candleS.closeTime]);
-        setSimulationValueDataCompleteSec(prev => [...prev, candleS]);
-
-        // avança para o próximo
-        offsetRefSecondary += 1;
-      }
-
-      // agora, processa todos os key até <= dateP
-      while (true) {
-        if (isPausedKeyRef.current) {
-          console.log("⏸️ Pausado durante processamento do key. Retomando depois...");
-          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
-          return;
-        }
-
-        let candleK = await fetchOne(epKey, offsetRefKey);
-
-        if (!candleK) {
-          break;
-        }
-
-        let dateK = candleK.closeTime;
-        if (dateK > dateP) {
-          // próximo é depois, para sem avançar
-          break;
-        }
-
-        // registra o key
-        setSimulationValueDataKey(prev => [...prev, parseFloat(candleK.closePrice)]);
-        setSimulationLabelDataKey(prev => [...prev, candleK.closeTime]);
-        setSimulationValueDataCompleteKey(prev => [...prev, candleK]);
-
-        // avança para o próximo
-        offsetRefKey += 1;
-      }
-
-      // agora, processa todos os RSI até <= dateP
+      // 🔹 RSI sincronizado ao primary
       while (true) {
         if (isPausedRsiRef.current) {
           console.log("⏸️ Pausado durante processamento do RSI. Retomando depois...");
-          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+          simulationTimeoutSyncRef.current = setTimeout(
+            () => simulateStepSync(symbolPrimary),
+            300
+          );
           return;
         }
 
         let candleRsi = await fetchOne(epRsi, offsetRefRsi);
+
         if (!candleRsi) {
           break;
         }
 
-        let dateRsi = candleRsi.time;
-        if (dateRsi > dateP) {
-          // próximo é depois, para sem avançar
+        // próximo é depois, para sem avançar
+        const dateRsi = candleRsi.time;
+        const tRsi = new Date(dateRsi).getTime();
+
+        if (tRsi > tp) {
           break;
         }
+        const value =
+          candleRsi.amrsi ??
+          candleRsi.rsi_ma ??
+          candleRsi.rsi;
 
-        // registra RSI
-        const value = candleRsi.amrsi ?? candleRsi.rsi_ma ?? candleRsi.rsi;
         setSimulationValueDataRsi(prev => [...prev, parseFloat(value)]);
         setSimulationLabelDataRsi(prev => [...prev, candleRsi.time]);
         setSimulationValueDataCompleteRsi(prev => [...prev, candleRsi]);
 
         // avança para o próximo
-        offsetRefRsi += 1;
+        offsetRefRsi += 4;
       }
 
+
+      // 🔹 VPPR sincronizado ao primary
       while (true) {
-        if (isPausedPriceRef.current) {
-          console.log("⏸️ Pausado durante processamento do secondary. Retomando depois...");
-          simulationTimeoutSyncRef.current = setTimeout(() => simulateStepSync(symbolPrimary, symbolSecondary), 500);
+        if (isPausedVpprRef.current) {
+          console.log("⏸️ Pausado durante processamento do Vppr. Retomando depois...");
+          simulationTimeoutSyncRef.current = setTimeout(
+            () => simulateStepSync(symbolPrimary), 300
+          );
           return;
         }
+        // pega o próximo candle (driver)
+        let candleVppr = await fetchOne(epVppr, offsetRefVppr);
+        console.log("candleVppr ", candleVppr);
 
-        // pega próximo candle do preços completos atuais (driver)
-        let candlePc = await fetchOne(epPriceCurrent, offsetRefPrice);
-        if (!candlePc) {
-          console.log("✅ Simulação finalizada (preços completos terminou)");
+        if (!candleVppr) {
+          console.log("✅ Simulação finalizada (Vppr terminou)");
           return;
         }
-
 
         // data (somente parte data "YYYY-MM-DD" para sincronização por data)
-        let datePc = candlePc.time;
-        if (datePc > dateP) {
-          // próximo é depois, para sem avançar
+        let dateVppr = candleVppr.time;
+        const tVppr = new Date(dateVppr).getTime();
+
+
+        if (tVppr > tp) {
           break;
         }
 
+        // registra o Vppr (use closeTime completo para label, para distinguir múltiplos)
+        setSimulationValueDataVppr(prev => [...prev, parseFloat(candleVppr.vppr)]);
+        setSimulationLabelDataVppr(prev => [...prev, candleVppr.time]);
+        setSimulationValueDataCompleteVppr(prev => [...prev, candleVppr]);
+        setSimulationValueDataVpprEma(prev => [...prev, candleVppr.vppr_ema]);
 
-        // registra o primary (use closeTime completo para label, para distinguir múltiplos)
-        setSimulationValueDataPrice(prev => [...prev, parseFloat(candlePc.close)]);
-        setSimulationLabelDataPrice(prev => [...prev, candlePc.time]);
-        setSimulationValueDataCompletePrice(prev => [...prev, candlePc]);
-
-        // avança o offset do primary para o próximo passo
-        offsetRefPrice += 1;
+        //avança para o próximo
+        offsetRefVppr += 5;
       }
 
-
-      // agenda próxima iteração (próximo primary + catch-up)
+      // agenda próxima iteração (próximo Vppr + catch-up)
       simulationTimeoutSyncRef.current = setTimeout(() => {
-        simulateStepSync(symbolPrimary, symbolSecondary);
+        simulateStepSync(symbolPrimary);
       }, 300);
 
     } catch (error) {
@@ -342,6 +277,9 @@ const ContextApi = (props) => {
       clearTimeout(simulationTimeoutSyncRef.current);
     }
   };
+
+
+
 
   /*-----------------------------------------------------------------
     1️⃣ Função para Selecionae datas para simulação do ativo Primária
@@ -364,17 +302,7 @@ const ContextApi = (props) => {
       // 🔹Chamada da API para enviar o modo para simular a classificação
       await axios.post(`${url}/api/filter_price_atr?symbol=${symbol}&modo=${modo}`);
       await axios.get(`${url}/api/rsi?period=${period}&symbol=${symbol}&modo=${modo}`);
-      await axios.post(
-        `${url}/api/filter_price_key`,
-        {}, // corpo vazio
-        {
-          params: {
-            modo: modo,
-            symbol: symbol,
-            symbol_sec: symbolSec
-          }
-        }
-      );
+      await axios.get(`${url}/api/vppr?symbol=${symbol}&modo=${modo}`);
 
       getDateSimulation();
 
@@ -398,78 +326,6 @@ const ContextApi = (props) => {
       console.error("Erro na API de atualização de datas:", error.response?.data || error.message);
     }
   }
-
-  /*-----------------------------------------------------------------
-    2️⃣ Função para Selecionae datas para simulação do ativo Secundário
-   -------------------------------------------------------------------*/
-  const dateSimulationSec = async () => {
-    try {
-      const response = await axios.post(
-        `${url}/api/update_klines_sec`,
-        {}, // corpo vazio
-        {
-          params: {
-            date_start: dateSimulationStartSec,
-            date_end: dateSimulationEndSec,
-            days: daysValueSec,
-            symbol: symbolSec
-          }
-        }
-      );
-
-      // 🔹Chamada da API para enviar o modo para simular a classificação
-      await axios.post(`${url}/api/filter_price_atr_second?symbol=${symbolSec}&modo=${modo}`);
-      await axios.post(
-        `${url}/api/filter_price_key`,
-        {}, // corpo vazio
-        {
-          params: {
-            modo: modo,
-            symbol: symbol,
-            symbol_sec: symbolSec
-          }
-        }
-      );
-
-      getDateSimulationSec()
-
-      // ✅ Toast de sucesso
-      toast.current.show({
-        severity: "success",
-        summary: 'Sucesso!',
-        detail: `Os dados para simular foram baixados!`,
-        life: 5000
-      });
-
-
-    } catch (error) {
-      // ❌ Toast de erro
-      toast.current.show({
-        severity: 'error',
-        summary: 'Erro',
-        detail: `Não é possível baixar dados para simular`,
-        life: 5000
-      });
-      console.error("Erro na API de atualização de datas:", error.response?.data || error.message);
-    }
-  }
-
-  /*-------------------------------------------------
- 2️⃣ Busca as datas da simulação do ativo Primária
- ---------------------------------------------------*/
-  const getDateSimulationSec = async () => {
-    try {
-      const response = await axios.get(`${url}/api/get_date/simulation_sec`);
-      const data = response.data;
-      setDaysSec(data.days || '');
-      setDateSimulationStartSec(data.days_start || '')
-      setDateSimulationEndSec(data.days_end || '')
-
-    } catch (error) {
-      console.error("Erro na API para recuperar datas:", error);
-    }
-  }
-
 
   /*#####################################################################
                            1️⃣💰FIM DA SIMULAÇÃO💰1️⃣
@@ -524,7 +380,6 @@ const ContextApi = (props) => {
       setValues(prices);
       setDadosPrice(data);
       setSymbol(searchedSymbol);
-      graphicDataKey();
 
       // ✅ Toast de sucesso
       toast.current.show({
@@ -565,123 +420,6 @@ const ContextApi = (props) => {
   ########################################################################*/
 
 
-
-
-  /*#####################################################################
-                       2️⃣📈INICIO ATIVO SECUNDÁRIO📈2️⃣
-  ########################################################################*/
-  /*-------------------------------------------------
-    2️⃣ Função para buscar dados do ativo Primária
-   --------------------------------------------------*/
-  const graphicDataSecondary = async (symbolSecParam) => {
-    if (!symbolSecParam) return;
-
-    try {
-      const response = await axios.get(`${url}/api/filter_price_atr_second?symbol=${symbolSecParam}`);
-      const data = response.data;
-
-      const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => {
-        return p.closeTime.split(' ')[0];
-      });
-
-      setDadosPriceSecondary(data);
-      setLabelsSecondary(time);
-      setValuesSecondary(prices)
-    } catch (error) {
-      console.error("Erro na API para recuperar símbolos:", error);
-    }
-  }
-  /*----------------------------------------------------------------
-  🔍2️⃣Faz pequisa do simbolo envia para backend (do ativo primária)
-  -----------------------------------------------------------------*/
-  const handleSearchSec = async (event) => {
-    event?.preventDefault();
-    inputRefSec.current.focus();
-
-    const symbol = inputRefSec.current.value.toUpperCase();
-    if (!symbol) return;
-
-    try {
-      const response = await axios.get(`${url}/api/filter_price_atr_second?symbol=${symbol}`);
-      const data = response.data;
-
-      const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => p.closeTime);
-
-      setDadosPriceSecondary(data);
-      setLabelsSecondary(time);
-      setValuesSecondary(prices);
-      setSymbolSec(symbol);
-      graphicDataKey();
-
-      // ✅ Toast de sucesso
-      toast.current.show({
-        severity: "success",
-        summary: 'Busca realizada',
-        detail: `Símbolo ${symbol} carregado com sucesso!`,
-        life: 5000
-      });
-
-    } catch (error) {
-      // ❌ Toast de erro
-      toast.current.show({
-        severity: 'error',
-        summary: 'Erro na busca',
-        detail: `Não foi possível buscar o símbolo: ${symbol}`,
-        life: 5000
-      });
-
-      console.error('Erro ao buscar dados:', error);
-    }
-    inputRefSec.current.value = "";
-  };
-  /*------------------------------
-  🔍2️⃣Busca o simbolo secundário
- --------------------------------*/
-  const getSymbolSec = async () => {
-    try {
-      const response = await axios.get(url + "/api/last_symbol_second")
-      const data = response.data;
-      setSymbolSec(data.symbol);
-      return data.symbol;
-    } catch (error) {
-      console.error("Erro na API para recuperar símbolos:", error);
-    }
-  };
-  /*#####################################################################
-                         2️⃣📈FIM ATIVO SECUNDÁRIO📈2️⃣
-  ########################################################################*/
-
-
-
-
-  /*#####################################################################
-                       🔑INICIO ATIVO CHAVE🔑
-  ########################################################################*/
-  const graphicDataKey = async () => {
-    try {
-      const response = await axios.get(url + "/api/filter_price_key");
-      const data = response.data;
-      const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => {
-        return p.closeTime.split(' ')[0];
-      });
-
-      setDadosPriceKey(data);
-      setLabelsKey(time);
-      setValueKey(prices);
-
-    } catch (error) {
-      console.error("Erro na API:", error);
-    }
-  };
-  /*#####################################################################
-                          🔑FIM ATIVO SECUNDÁRIO🔑
-  ########################################################################*/
-
-
-
   /*------------------------------------------------------------------------------
     🗓 Salva o tempo grafico que vai ser usando como dados (envia para o backend)
   --------------------------------------------------------------------------------*/
@@ -711,10 +449,7 @@ const ContextApi = (props) => {
 
         const data = response.data;
         setActiveButton(data.time);
-        graphicDataSecondary(symbolSec)
-        graphicDataKey()
         handleGetPoints()
-        handleGetPointsKey()
         graphicDataOne(symbol)
 
 
@@ -782,34 +517,6 @@ const ContextApi = (props) => {
       }
     });
   };
-  /*--------------------------------
-    pega pontos de pivot importantes chaves
-  ----------------------------------*/
-  const handleGetPointsKey = async () => {
-    try {
-      const response = await axios.get(`${url}/api/trend_clarifications_key`);
-      const data = response.data;
-      if (data) {
-        setImportantPointsKey(data);
-      }
-    } catch (error) {
-      console.error("Erro ao buscar ponto importante:", error);
-    }
-  }
-  /*------------------------------------------
-   Função para adicionar/remover pivôs chaves
-  --------------------------------------------*/
-  const togglePivotKey = (label, price) => {
-    setSelectedPivotsKey(prev => {
-      const exists = prev.find(p => p.valor === price && p.texto === label);
-      if (exists) {
-        return prev.filter(p => !(p.valor === price && p.texto === label));
-      } else {
-        return [...prev, { valor: price, texto: label, cor: 'white' }];
-      }
-    });
-  };
-
 
 
   /*------------------------------------------
@@ -828,13 +535,41 @@ const ContextApi = (props) => {
       }
 
       const value = data.map(p => parseFloat(p.rsi_ma));
-      const time = data.map(p => p.time.split(' ')[0]);
+      const time = data.map(p => p.time.split(' '));
       setRsi([...value])
       setRsiTime([...time])
     } catch (error) {
       console.error("Erro ao buscar dados do RSI", error);
     }
   };
+
+  /*--------------------------------------------------------------------
+ Função para pegar dados do calculo  vppr (Volume Price Pressure Ratio) 
+-------------------------------------------------------------------------*/
+  const getVppr = async (symbol) => {
+    try {
+      const response = await axios.get(
+        `${url}/api/vppr?symbol=${symbol}&modo=${modo}`
+      )
+      const data = response.data;
+      if (!Array.isArray(data)) {
+        console.warn("Dados do VPPR não são um array:", data);
+        return;
+      }
+      const value = data.map(p => parseFloat(p.vppr));
+      const time = data.map(p => p.time.split(' '[0]));
+      const ema = data.map(p => parseFloat(p.vppr_ema));
+      setVppr([...value])
+      setVpprTime([...time])
+      setVpprEma([...ema])
+
+    } catch (error) {
+      console.error("Erro ao buscar dados do VPPR", error);
+    }
+  }
+
+
+
 
 
 
@@ -1580,7 +1315,8 @@ const ContextApi = (props) => {
           currentTrend === "Tendência Baixa" &&
           rallySecundaria.closePrice >= lowExit &&
           rallySecundaria.closePrice <= highExit) {
-          setRetestPoints([
+          setRetestPoints([{ name: "high", value: highExit },
+          { name: "low", value: lowExit },
           { name: "pivo", value: pivoRallySec },
           { name: "naturalReactionSec", value: rallySecundaria },
           { name: "stop buy", value: buyExit },
@@ -1685,54 +1421,33 @@ const ContextApi = (props) => {
     if (realTime === "real") {
       clearTimeout(simulationTimeoutRef.current);
       offsetRefPrimary = 0;
-      offsetRefSecondary = 0;
-      offsetRefKey = 0;
       setSimulationValueData([]);
       setSimulationLabelData([]);
-      setSimulationValueDataSec([]);
-      setSimulationLabelDataSec([]);
-      setSimulationValueDataKey([]);
-      setSimulationLabelDataKey([]);
-
     }
   }, [realTime]);
 
-  useEffect(() => {
-    if (realTime === "real") {
-      clearTimeout(simulationSecTimeoutRef.current);
-      setSimulationLabelDataSec([]);
-      setSimulationValueDataSec([]);
-      offsetRefSecondary = 0;
-      offsetRefPrimary = 0;
-    }
-  }, [realTime]);
+
 
 
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
-  useEffect(() => {
-    isPausedSecRef.current = isPausedSec
-  }, [isPausedSec]);
-
 
 
   useEffect(() => {
     async function loadData() {
       try {
         const savedSymbol = await getSymbol();
-        const savedSymbolSec = await getSymbolSec();
 
-        if (savedSymbol || savedSymbolSec) {
+
+        if (savedSymbol) {
           await Promise.all([
-            LoadGraphicDataOne(savedSymbol, savedSymbolSec),
+            LoadGraphicDataOne(savedSymbol),
             handleGetTime(),
             handleGetPoints(),
-            handleGetPointsKey(),
             getDateSimulation(),
-            getDateSimulationSec(),
 
-          ], [savedSymbol, savedSymbolSec]);
+          ], [savedSymbol]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
         }
@@ -1742,36 +1457,50 @@ const ContextApi = (props) => {
     }
     loadData();
 
-    /* Executa a cada uma hora */
+
+
+    /* Executa a cada 15 minutos*/
     if (realTime === "real") {
       const now = new Date();
       const minutes = now.getMinutes();
       const seconds = now.getSeconds();
       const ms = now.getMilliseconds();
 
-      // Quanto tempo falta até a próxima hora cheia
-      const delay = ((61 - minutes) * 60 * 1000) - (seconds * 1000) - ms;
-      console.log(`⏳ Atualização programada para daqui a ${Math.round(delay / 1000)} segundos`);
+      const nextQuarter = Math.ceil(minutes / 15) * 15;
+      const minutesToWait =
+        nextQuarter === 60 ? 60 - minutes : nextQuarter - minutes;
+
+      let delay =
+        (minutesToWait * 60 * 1000) -
+        (seconds * 1000) -
+        ms;
+        
+      // ⏱️ atraso extra de 30 segundos
+      delay += 30 * 1000;
+
+      console.log(
+        `⏳ Atualização programada para daqui a ${Math.round(delay / 1000)} segundos`
+      );
 
       setTimeout(() => {
-        // Atualiza na hora cheia
         updateAllData();
 
-        // Depois executa a cada 60 minutos
         setInterval(() => {
           updateAllData();
-        }, 61 * 60 * 1000);
+        }, 15 * 60 * 1000);
+
       }, delay);
-    };
+    }
+
+
+
+
 
     async function updateAllData() {
       try {
         await Promise.all([
-          graphicDataSecondary(symbolSec),
           graphicDataOne(symbol),
-          graphicDataKey(),
           handleGetPoints(),
-          handleGetPointsKey(),
         ]);
         console.log("✅ Dados atualizados em", new Date().toLocaleTimeString());
       } catch (error) {
@@ -1779,7 +1508,7 @@ const ContextApi = (props) => {
       }
     }
     ;
-  }, [symbol, symbolSec, realTime]);
+  }, [symbol, realTime]);
 
 
   const contextValue = {
@@ -1788,28 +1517,16 @@ const ContextApi = (props) => {
     values,
     labels,
     dadosPrice,
-    dadosPriceSecondary,
-    valuesSecondary,
-    labelsSecondary,
     theme,
     setTheme,
-    dadosPriceKey,
-    labelsKey,
-    valuesKey,
     handleSearch,
     inputRefMain,
-    inputRefSec,
-    handleSearchSec,
     symbol,
-    symbolSec,
     handleClickTime,
     activeButton,
     importantPoints,
     togglePivot,
     selectedPivots,
-    importantPointsKey,
-    togglePivotKey,
-    selectedPivotsKey,
     setRealTime,
     realTime,
     simulationLabelData,
@@ -1817,15 +1534,7 @@ const ContextApi = (props) => {
     isPaused,
     setIsPaused,
     isPausedRef,
-    simulationLabelDataSec,
-    simulationValueDataSec,
-    isPausedSec,
-    setIsPausedSec,
-    simulationLabelDataKey,
-    simulationValueDataKey,
     simulationValueDataComplete,
-    simulationValueDataCompleteSec,
-    simulationValueDataCompleteKey,
     dateSimulationStart,
     setDateSimulationStart,
     dateSimulationEnd,
@@ -1837,20 +1546,16 @@ const ContextApi = (props) => {
     setShowDaysInput,
     daysValue,
     setDaysValue,
-    showDaysInputSec,
-    daysSec,
-    daysValueSec,
-    dateSimulationStartSec,
-    setDateSimulationEndSec,
-    setDateSimulationStartSec,
-    dateSimulationEndSec,
-    dateSimulationSec,
-    setDaysValueSec,
-    setShowDaysInputSec,
     rsi,
     rsiTime,
     simulationValueDataRsi,
     simulationLabelDataRsi,
+    vppr,
+    vpprTime,
+    vpprEma,
+    simulationLabelDataVppr,
+    simulationValueDataVppr,
+    simulationValueDataVpprEma
   };
 
   return (

@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from db import get_timeframe_global, get_data_klines, symbolo_saved, save_rsi
+from db import get_timeframe_global, get_data_klines, symbolo_saved
 from binance.client import Client
 
 client = Client()
