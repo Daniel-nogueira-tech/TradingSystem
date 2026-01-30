@@ -1,4 +1,7 @@
-def calcular_atr_movel(dados, periodo=None):
+from db import save_atr
+
+
+def calcular_atr_movel(dados, periodo=5):
     if len(dados) < periodo + 30:
         print("Poucos dados para calcular ATR móvel.")
         return []
@@ -19,13 +22,14 @@ def calcular_atr_movel(dados, periodo=None):
     return atrs
 
 
-def suavizar_atr(atrs, periodo=None):
+def suavizar_atr(atrs, periodo=365):
     if len(atrs) < periodo:
         return []
 
-    atr_suavizado = []
+    atr_soft = []
     for i in range(periodo - 1, len(atrs)):
         soma = sum([atrs[j]["ATR"] for j in range(i - periodo + 1, i + 1)])
         media = soma / periodo
-        atr_suavizado.append({"Tempo": atrs[i]["Tempo"], "ATR_Suavizado": media})
-    return atr_suavizado
+        atr_soft.append({"Tempo": atrs[i]["Tempo"], "atr_soft": media})
+    save_atr(atr_soft)
+    return atr_soft

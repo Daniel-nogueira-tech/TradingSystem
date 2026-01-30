@@ -2,6 +2,7 @@ from binance.client import Client
 import pandas as pd
 from datetime import datetime
 from db import get_timeframe_global, symbolo_saved, get_data_klines
+from klines.klines import get_klines_extended
 
 client = Client()
 
@@ -35,7 +36,7 @@ def get_vppr(symbol, modo=None, offset=None, limit=None):
         if modo == "simulation":
             klines = get_data_klines(symbol, time)
         else:
-            klines = client.get_klines(symbol=symbol, interval=time, limit=1500)
+            klines = get_klines_extended(symbol=symbol, interval=time, total=2000)
     except Exception as e:
         print(f"❌ Erro ao buscar dados: {str(e)}")
         return []

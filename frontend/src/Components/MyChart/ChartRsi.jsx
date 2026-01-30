@@ -172,7 +172,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
 
             // 🔹 Linha fixa no RSI 30
             {
-                label: 'AMRSI 60',
+                label: 'AMRSI 70',
                 data: new Array(activeLabel.length).fill(70),
                 borderColor: 'orange',
                 borderWidth: 1,

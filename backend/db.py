@@ -388,49 +388,66 @@ def get_date_simulation():
     return result
 
 
-# cria tabela para precos
-def init_db_prices():
+# --------------------------------
+# cria tabela para precos do atr
+# --------------------------------
+def init_db_atr():
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute(
-        """CREATE TABLE IF NOT EXISTS current_price(
-            time TEXT PRIMARY KEY,
-            close REAL
+        """CREATE TABLE IF NOT EXISTS atr(
+            Tempo TEXT PRIMARY KEY,
+            atr_soft REAL
         )"""
     )
     conn.commit()
     conn.close()
 
 
-# salva preço atual
-def save_current_price(prices):
+# --------------------------------
+# salva atr
+# --------------------------------
+def save_atr(atr_soft):
     conn = conectar()
     cursor = conn.cursor()
+
+    cursor.execute("DELETE FROM atr")
+
+    # transforma em lista de tuplas (time, atr)
+    atr = [(d["Tempo"], d.get("atr_soft")) for d in atr_soft]
+
+    # Inserção em massa
     cursor.executemany(
-        "INSERT OR REPLACE INTO current_price (time, close) VALUES (?, ?)",
-        prices,
+        "INSERT INTO atr(Tempo, atr_soft) VALUES (?, ?)",
+        atr,
     )
     conn.commit()
     conn.close()
 
 
-# delete preço atual
-def delete_current_price():
+# --------------------------------
+# Pega dados de atr
+# --------------------------------
+def get_atr_first_of_month():
     conn = conectar()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM current_price")
-    conn.commit()
-    conn.close()
 
+    cursor.execute(
+        """
+        SELECT atr_soft
+        FROM atr
+        WHERE Tempo IN (
+            SELECT MIN(Tempo)
+            FROM atr
+            GROUP BY strftime('%Y-%m', Tempo)
+        )
+        ORDER BY Tempo ASC
+    """
+    )
 
-# pega os preço completos
-def get_current_price():
-    conn = conectar()
-    cursor = conn.cursor()
-    cursor.execute("SELECT time,close FROM current_price ORDER BY time ASC")
-    dados = cursor.fetchall()
+    result = cursor.fetchall()
     conn.close()
-    return dados
+    return result
 
 
 # --------------------------------

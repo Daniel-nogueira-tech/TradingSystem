@@ -12,13 +12,13 @@ import {
     Legend,
     LogarithmicScale,
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2'; 
+import { Bar } from 'react-chartjs-2';
 import { AppContext } from '../../ContextApi/ContextApi';
 import { useEffect } from 'react';
 import Swal from 'sweetalert2';
 
 ChartJS.register(
-    BarElement, 
+    BarElement,
     CategoryScale,
     LinearScale,
     Title,
@@ -32,6 +32,7 @@ const ChartBar = () => {
     const {
         values,
         labels,
+        atr,
         handleSearch,
         inputRefMain,
         symbol,
@@ -54,6 +55,8 @@ const ChartBar = () => {
         days
     } = useContext(AppContext);
     const chartRef = useRef();
+
+    let trendState = 'neutral';
 
 
     const handleZoomIn = () => {
@@ -79,10 +82,32 @@ const ChartBar = () => {
 
 
     const backgroundColor = activeValue.map((valor, index) => {
-        if (index === 0) return 'rgba(113, 113, 113, 0.6)';
-        return valor >= activeValue[index - 1]
-            ? 'rgba(0, 255, 0, 0.44)'
-            : 'rgba(255, 0, 0, 0.42)';
+        if (index === 0) {
+            return 'rgba(113, 113, 113, 0.6)';
+        }
+
+        const diff = valor - activeValue[index - 1];
+
+        // 🔼 Transição para alta
+        if (diff >= atr) {
+            trendState = 'up';
+        }
+
+        // 🔽 Transição para baixa
+        if (diff <= -atr) {
+            trendState = 'down';
+        }
+
+        // 🎨 Mantém a cor até nova transição
+        if (trendState === 'up') {
+            return 'rgba(0, 255, 0, 0.44)';
+        }
+
+        if (trendState === 'down') {
+            return 'rgba(255, 0, 0, 0.44)';
+        }
+
+        return 'rgba(113, 113, 113, 0.6)';
     });
 
 
@@ -376,8 +401,8 @@ const ChartBar = () => {
                 </div>
             )}
             {isLoading ? (
-                <div style={{ width: "300px", height: "270px", margin: "20px auto", textAlign: "center"}}>
-                        <ProgressBar mode="indeterminate" style={{ height: '8px', top:"110px"}} />
+                <div style={{ width: "300px", height: "270px", margin: "20px auto", textAlign: "center" }}>
+                    <ProgressBar mode="indeterminate" style={{ height: '8px', top: "110px" }} />
                 </div>
             ) : (
                 < >

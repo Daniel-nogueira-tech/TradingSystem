@@ -31,18 +31,17 @@ from db import (
     init_db_rsi,
     save_rsi,
     get_data_rsi,
-    init_db_prices,
-    save_current_price,
-    delete_current_price,
-    get_current_price,
     ini_db_vppr,
     save_vppr,
     get_data_vppr,
+    init_db_atr,
+    get_atr_first_of_month,
 )
 from indicators.atr import calcular_atr_movel, suavizar_atr
 from indicators.rsi import get_rsi
 from operation.operation import operation
 from indicators.vppr import get_vppr
+from klines.klines import get_klines_extended, formatar_dados_brutos
 
 client = Client()
 app = Flask(__name__)
@@ -59,28 +58,8 @@ create_table_trend_clarifications()
 clear_table_trend_clarifications()
 init_db()
 init_db_rsi()
-init_db_prices()
 ini_db_vppr()
-
-
-# --------------------------------------------------------
-# Função para formatar os dados brutos da API da Binance
-# --------------------------------------------------------
-def formatar_dados_brutos(dados_brutos):
-    dados_formatados = []
-
-    for k in dados_brutos:
-        dado = {
-            "Tempo": datetime.fromtimestamp(k[0] / 1000).strftime("%Y-%m-%d %H:%M:%S"),
-            "Abertura": float(k[1]),
-            "Maximo": float(k[2]),
-            "Minimo": float(k[3]),
-            "Fechamento": float(k[4]),
-            "Volume": float(k[5]),
-        }
-        dados_formatados.append(dado)
-
-    return dados_formatados
+init_db_atr()
 
 
 # --------------------------------
@@ -442,31 +421,6 @@ def simulate_price_atr():
     return jsonify(dados)
 
 
-# ---------------------------------------------------------------------------
-# 📊 1️⃣  Pega os dados completos para validar entrada no frontend simulação.
-# ---------------------------------------------------------------------------
-@app.route("/api/simulate_current_price", methods=["GET"])
-def simulate_current_price():
-    offset = int(request.args.get("offset", 0))
-    limit = int(request.args.get("limit", 10))
-
-    price = get_current_price()
-
-    if not price:
-        return jsonify([])
-
-    price_slice = price[offset : offset + limit]
-
-    dados = [
-        {
-            "time": m[0],
-            "close": m[1],
-        }
-        for m in price_slice
-    ]
-    return jsonify(dados)
-
-
 # -------------------------------------------
 # 📊 1️⃣  Pega as datas ou dias da simulação.
 # -------------------------------------------
@@ -492,6 +446,8 @@ def get_date_simalation():
 # ==========================================================================
 #                          Inicie a classificação
 # ==========================================================================
+
+
 # ------------------------------
 # 1️⃣ Endpoint do ativo Primeiro
 # ------------------------------
@@ -520,8 +476,8 @@ def filter_price_atr():
         else:
             clear_table_trend_clarifications()
             # 🔁 Pega os dados em tempo real da Binance
-            dados_brutos = client.get_klines(
-                symbol=symbol_primary, interval=time, limit=1500
+            dados_brutos = get_klines_extended(
+                symbol=symbol_primary, interval=time, total=2000
             )
             dados = formatar_dados_brutos(dados_brutos)
 
@@ -535,16 +491,20 @@ def filter_price_atr():
     timestamps = [item["Tempo"] for item in dados]
 
     # Calcula o ATR suavizado
-    atrs = calcular_atr_movel(dados, periodo=5)
-    atr_suave = suavizar_atr(atrs, periodo=365)
+    atrs = calcular_atr_movel(dados)
+    atr_suave = suavizar_atr(atrs)
 
     if not atr_suave:
         return jsonify({"erro": "ATR não pôde ser calculado."}), 400
 
-    verify_time_multiply = 6
+    if time == "1d":
+        verify_time_multiply = 5
+    else:
+        verify_time_multiply = 6
 
     # Define os limites com base no ATR
-    atr_ultima_suave = atr_suave[-1]["ATR_Suavizado"]
+    atr_ultima_suave = get_atr_first_of_month()[-1][0]
+
     atr_mult = atr_ultima_suave * verify_time_multiply
 
     # Aredonda os valores
@@ -578,7 +538,6 @@ def filter_price_atr():
     ultimo_pivot_rally_sec_temp_baixa = None
     ultimo_pivot_rally_sec_alta = None
     ultimo_pivot_rally_sec_temp_alta = None
-    prices_to_insert = []
 
     # Primeiro ponto é sempre um Rally Natural Inicial
     movimentos.append(
@@ -596,9 +555,6 @@ def filter_price_atr():
         movimento_adicionado = False  # Controle para evitar duplicação
         cont += 1
         price = preco
-
-        # salva preço atual
-        prices_to_insert.append((tempo, preco))
 
         # === ESTADO INICIAL ===
         # Detecta início de tendência
@@ -1084,7 +1040,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária (Baixa)",
+                            "tipo": "Reação secundária",
                             "limite": limite,
                         }
                     )
@@ -1369,7 +1325,7 @@ def filter_price_atr():
                         {
                             "closeTime": tempo,
                             "closePrice": preco,
-                            "tipo": "Reação secundária (Alta)",
+                            "tipo": "Reação secundária",
                             "limite": limite,
                         }
                     )
@@ -1616,9 +1572,6 @@ def filter_price_atr():
 
     # Salva todos os dados de uma vez
     save_trend_clarifications(movimentos_para_salvar)
-    # salvar os precos
-    if prices_to_insert:
-        save_current_price(prices_to_insert)
 
     return jsonify(movimentos)
 

@@ -17,6 +17,7 @@ const ContextApi = (props) => {
   const [theme, setTheme] = useState(() => { return localStorage.getItem('theme') || 'dark'; });
   const [values, setValues] = useState([]);
   const [labels, setLabels] = useState([]);
+  const [atr, setAtr] = useState([]);
   const [dadosPrice, setDadosPrice] = useState([]);
   const inputRefMain = useRef(null);
   const [symbol, setSymbol] = useState("");
@@ -81,7 +82,6 @@ const ContextApi = (props) => {
 
 
   const period = 14; /* periodo do AMRSI */
-
 
 
   /*-----------------------------------------------
@@ -170,14 +170,13 @@ const ContextApi = (props) => {
       if (isPausedRef.current) {
         simulationTimeoutSyncRef.current = setTimeout(
           () => simulateStepSync(symbolPrimary),
-          500
+          300
         );
         return;
       }
 
       // 🔹 PRIMARY (driver do tempo)
       let candleP = await fetchOne(epPrimary, offsetRefPrimary);
-      console.log("epPrimary ", candleP);
       if (!candleP) {
         console.log("✅ Simulação finalizada (primary terminou)");
         return;
@@ -241,7 +240,6 @@ const ContextApi = (props) => {
         }
         // pega o próximo candle (driver)
         let candleVppr = await fetchOne(epVppr, offsetRefVppr);
-        console.log("candleVppr ", candleVppr);
 
         if (!candleVppr) {
           console.log("✅ Simulação finalizada (Vppr terminou)");
@@ -264,7 +262,7 @@ const ContextApi = (props) => {
         setSimulationValueDataVpprEma(prev => [...prev, candleVppr.vppr_ema]);
 
         //avança para o próximo
-        offsetRefVppr += 5;
+        offsetRefVppr += 4;
       }
 
       // agenda próxima iteração (próximo Vppr + catch-up)
@@ -340,13 +338,14 @@ const ContextApi = (props) => {
   /*-------------------------------------------------
     1️⃣ Função para buscar dados do ativo Primária
    --------------------------------------------------*/
-  const graphicDataOne = async (symbolParam) => {
+  const graphicDataOne = async (symbol) => {
     // 🧹 Limpa dados da simulação
     clearTimeout(simulationTimeoutRef.current);
     try {
-      const response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbolParam}`);
+      const response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbol}`);
       const data = response.data;
       const prices = data.map(p => parseFloat(p.closePrice));
+      const atrLast = parseFloat(data[data.length - 1].limite);
       const time = data.map(p => {
         return p.closeTime.split(' ')[0];
       });
@@ -354,6 +353,7 @@ const ContextApi = (props) => {
       setDadosPrice(data);
       setLabels(time);
       setValues(prices);
+      setAtr(atrLast)
 
     } catch (error) {
       console.error("❌ Erro ao buscar dados em tempo real:", error);
@@ -449,8 +449,10 @@ const ContextApi = (props) => {
 
         const data = response.data;
         setActiveButton(data.time);
-        handleGetPoints()
-        graphicDataOne(symbol)
+        handleGetPoints();
+        graphicDataOne(symbol);
+        getRsi(symbol);
+        getVppr(symbol);
 
 
         Swal.fire({
@@ -643,7 +645,7 @@ const ContextApi = (props) => {
 
 
   /*#####################################################################
-                        🎯logica de compra alta início🎯
+                        🎯logica de compra e venda início🎯
 ########################################################################*/
 
   // Estado para armazenar o último topo anterior
@@ -769,6 +771,7 @@ const ContextApi = (props) => {
       let encontrouRallySecundaria = false;
       let ultimoPivoRallySec = false;
       let encontrouRallyNaturalParaSec = false;
+      let encontrouRallyNaturalSec_retest = false;
 
 
       for (let i = movements.length - 1; i >= 0; i--) {
@@ -816,8 +819,8 @@ const ContextApi = (props) => {
         }
 
         // depois que encontrar acha o ultimo Reação secundária (que vai ser o pivo)
-        if (!encontrouRallyNaturalParaSec && type.includes('Rally Natural')) {
-          ultimoPivoRallySec = {
+        if (!encontrouRallyNaturalParaSec && type.includes('Reação secundária')) {
+          pivotReactionSec = {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
@@ -829,20 +832,62 @@ const ContextApi = (props) => {
           continue;
         }
 
-        // Verificar se é uma Reação Natural (pode ser "Reação Natural (Alta)" ou "Reação Natural (fundo)")
-        if (encontrouRallyNaturalParaSec && type.includes('Reação secundária')) {
+
+        //////
+        // depois que encontrar acha o ultimo Reação secundária (que vai ser o pivo)
+        if (!encontrouRallyNaturalSec_retest && type.includes('Reação secundária')) {
           pivotReactionSec = {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
             atr: movement.atr,
             index: i
-          }
+          };
+          setRetestPoints([]) // reseta os pontos
+          encontrouRallyNaturalParaSec = true;
+          continue;
+        }
+
+      };
+
+      for (let i = movements.length - 1; i >= 0; i--) {
+        const movement = movements[i];
+        const type = movement.tipo;
+        // Verificar se é uma Rally Natural (pode ser "Rally Natural(Alta)" ou "Rally Natural (fundo)")
+        if (encontrouRallyNaturalParaSec && type.includes('Rally Natural')) {
+          ultimoPivoRallySec = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          };
+          setRetestPoints([])
+          break;
+        };
+      };
+
+      // verificar se funciona
+      for (let i = movements.length - 1; i >= 0; i--) {
+        const movement = movements[i];
+        const type = movement.tipo;
+        // Verificar se é uma Rally secundário (pode ser "Rally secundário (Alta)" ou "Rally secundário (fundo)")
+        if (encontrouRallyNaturalSec_retest && type.includes('Rally secundário')) {
+          ultimoPivoRallySec = {
+            closePrice: movement.closePrice,
+            closeTime: movement.closeTime,
+            tipo: movement.tipo,
+            atr: movement.atr,
+            index: i
+          };
+          setRetestPoints([])
           break;
         }
       }
       return { naturalRally, ultimoPivoRally, ultimoPivoRallySec };
     }
+
+
 
     // Encontra o tendencia
     const identifyBreakoutTrend = (movements) => {
@@ -861,6 +906,7 @@ const ContextApi = (props) => {
             atr: movement.atr,
             index: i
           };
+          setRetestPoints([])
           continue;
         }
 
@@ -873,6 +919,7 @@ const ContextApi = (props) => {
             atr: movement.atr,
             index: i
           };
+          setRetestPoints([])
           continue;
         }
       }
@@ -885,14 +932,16 @@ const ContextApi = (props) => {
 
 
 
+
+
     const { ultimoTopoAlta, ultimoFundoBaixa } = identifyHighTop(movements);
     const { naturalRally, ultimoPivoRally, ultimoPivoRallySec } = identifyRetestRally(movements)
     const { enteringTheTrend } = identifyBreakoutTrend(movements);
 
 
     let ultimoTopo = null;
-    let rally = null;
     let rallyPivo = null;
+    let rally = null;
     let rallySec = null;
     let trend = null;
 
@@ -1000,7 +1049,7 @@ const ContextApi = (props) => {
       if (isNovoPivo) {
         setUltimoPivoAnterior(pivo); // atualiza trava
       } else {
-        console.log("Pivô repetido pivô Penultimo - ignorando >");
+        console.log("ultimoPivoAnterior-ignorando repetição");
       }
     }
 
@@ -1009,9 +1058,10 @@ const ContextApi = (props) => {
         TrendPivot.closePrice !== ultimoPivoAtual.closePrice ||
         TrendPivot.index !== ultimoPivoAtual.index;
       if (isNovoPivo) {
-        console.log("NOVO pivô Atual >:", TrendPivot);
+        setultimoPivoAtual(TrendPivot)
       } else {
-        console.log("Pivô repetido pivô Atual - ignorando >");
+        console.log("TrendPivot-ignorando repetição");
+
       }
     }
 
@@ -1020,21 +1070,21 @@ const ContextApi = (props) => {
         pivoRallySec.closePrice !== ultimoPivoSec.closePrice ||
         pivoRallySec.index !== ultimoPivoSec.index;
       if (isNovoPivoSec) {
-        console.log("Pivô sec atual > ", pivoRallySec);
+        setUltimoPivoSec(pivoRallySec)
       }
       else {
-        console.log("Pivô sec repetido pivô Atual - ignorando >");
+        console.log("ultimoPivoSec-ignorando repetição");
       }
     }
 
     if (pivotBreak) {
       const isNewTrend = !enteringTheTrendUpdate ||
-        pivotBreak.closePrice !== enteringTheTrendUpdate ||
+        pivotBreak.closePrice !== enteringTheTrendUpdate.closePrice ||
         pivotBreak.index !== enteringTheTrendUpdate.index;
       if (isNewTrend) {
-        console.log("Rompimento da tendência atual > ", pivotBreak);
+        setEnteringTheTrendUpdate(pivotBreak)
       } else {
-        console.log("Rompimento da tendência atual repetido - ignorando > ", pivotBreak);
+        console.log("enteringTheTrendUpdate-ignorando repetição");
       }
     }
 
@@ -1048,6 +1098,7 @@ const ContextApi = (props) => {
     // ===============================
     // 3) RETESTE DE TENDÊNCIA
     // ===============================
+
     if (pivo && naturalReaction) {
       const atr = pivo.atr;
       const tolerance = atr / 4;
@@ -1141,7 +1192,6 @@ const ContextApi = (props) => {
     // ===============================
     // RETESTE DE RALLY
     // ===============================
-
     if (pivoRally && naturalReaction) {
       const atr = pivoRally.atr;
       const tolerance = atr / 4;
@@ -1235,11 +1285,9 @@ const ContextApi = (props) => {
     // RETEST NO PIVO DE RALLY EM UMA 
     // REAÇÃO SECUNDÁRIA
     // ===============================
-
-
     if (pivoRallyPrimary && naturalReactionSec) {
       const atr = pivoRallyPrimary.atr;
-      const tolerance = atr / 3;
+      const tolerance = atr / 4;
       const high = pivoRallyPrimary.closePrice + tolerance;
       const low = pivoRallyPrimary.closePrice - tolerance;
       const buyPoint = pivoRallyPrimary.closePrice + atr / 2;
@@ -1286,12 +1334,16 @@ const ContextApi = (props) => {
     // ===============================
     // SAÍDA REAÇÃO SECUNDÁRIA
     // ===============================
+
+
     if (pivoRallySec && rallySecundaria) {
-      const atr = pivoRallySec.atr; const tolerance = atr / 4;
+      const atr = pivoRallySec.atr;
+      const tolerance = atr / 4;
       const highExit = pivoRallySec.closePrice + tolerance;
       const lowExit = pivoRallySec.closePrice - tolerance;
       const sellExit = pivoRallySec.closePrice - atr / 2;
       const buyExit = pivoRallySec.closePrice + atr / 2;
+
 
       const eventId = buildEventId(pivoRallySec, rallySecundaria);
 
@@ -1299,10 +1351,11 @@ const ContextApi = (props) => {
         lastSecondaryExitIdRef.current = eventId;
 
         // 🟢
-        if (rallySecundaria &&
+        if (
+          rallySecundaria &&
           currentTrend === "Tendência Alta" &&
-          rallySecundaria >= lowExit &&
-          rallySecundaria <= highExit) {
+          rallySecundaria.closePrice <= highExit &&
+          rallySecundaria.closePrice >= lowExit) {
           setRetestPoints([
             { name: "pivo", value: pivoRallySec },
             { name: "naturalReactionSec", value: rallySecundaria },
@@ -1357,7 +1410,6 @@ const ContextApi = (props) => {
             { name: "stop", value: buyExit }]);
         }
       }
-
     };
 
 
@@ -1407,12 +1459,173 @@ const ContextApi = (props) => {
       }
     }
 
+    // 
+
+
   },
     [
       simulationValueDataComplete,
-
     ]);
   console.log("Compra ou venda", retestPoints);
+
+
+  /*#####################################################################
+                        🎯logica de confirmação usando vppr 🎯
+########################################################################*/
+  const [signalsVppr, setSignalsVppr] = useState([]);/**Entrada pela média */
+  const [signalsPowerVppr, setSignalsPowerVppr] = useState([]);/**Entrada acima do ponto Zero*/
+
+  useEffect(() => {
+    const movementsVppr = simulationValueDataCompleteVppr;
+    if (!movementsVppr?.length) return;
+
+    const vpprSignals = [];
+    const vpprPowerSignals = [];
+
+    for (let i = 0; i < movementsVppr.length; i++) {
+      const current = movementsVppr[i];
+
+      const percentage = current.vppr_ema * 0.1;
+      const bandsUp = current.vppr_ema + percentage;
+      const bandsLow = current.vppr_ema - percentage;
+
+      if (current.vppr > bandsUp) {
+        vpprSignals.push({
+          index: i,
+          signal: "buy",
+          vppr: current.vppr,
+          vppr_ema: current.vppr_ema,
+        });
+      } else if (current.vppr < bandsLow) {
+        vpprSignals.push({
+          index: i,
+          signal: "sell",
+          vppr: current.vppr,
+          vppr_ema: current.vppr_ema,
+        });
+      }
+
+      if (current.vppr > 0) {
+        vpprPowerSignals.push({
+          index: i,
+          signal: "buy power",
+          vppr: current.vppr,
+          vppr_ema: current.vppr_ema,
+        });
+      } else if (current.vppr < 0) {
+        vpprPowerSignals.push({
+          index: i,
+          signal: "sell power",
+          vppr: current.vppr,
+          vppr_ema: current.vppr_ema,
+        });
+      }
+    }
+    setSignalsVppr(vpprSignals);
+    setSignalsPowerVppr(vpprPowerSignals);
+
+  }, [simulationValueDataCompleteVppr]);
+
+
+  /*#####################################################################
+                        🎯logica de entrada e saída usando AMRSI 🎯
+########################################################################*/
+  const [signalsAmrsiSell, setSignalsAmrsiSell] = useState([]);/*(sobrecompra-parcial)*/
+  const [signalsAmrsiBuy, setSignalsAmrsiBuy] = useState([]);/*(sobrevenda-parcial)*/
+
+  const [signalsAmrsiSellReentry, setSignalsAmrsiSellReentry] = useState([]);/*(sobrevenda-reentrada)*/
+  const [signalsAmrsiBuyReentry, setSignalsAmrsiBuyReentry] = useState([]);/*(sobrevenda-reentrada)*/
+
+  useEffect(() => {
+    const movementAmrsi = simulationValueDataCompleteRsi;
+    if (!movementAmrsi?.length) return;
+
+    const amRsiSignalBuy = [];
+    const amRsiSinalSell = [];
+
+    const amRsiSignalBuyReentry = [];
+    const amRsiSinalSellReentry = [];
+
+    let wasOverbought = false;
+    let wasOversold = false;
+
+    let overboughtReentry = false;
+    let oversoldReentry = false;
+
+
+    for (let i = 0; i < movementAmrsi.length; i++) {
+      const { amrsi } = movementAmrsi[i];
+
+      /* ---------- SOBRECOMPRA PARCIAL ---------- */
+      // 1️⃣ entra em sobrecompra
+      if (amrsi >= 80) {
+        wasOverbought = true;
+      }
+
+      // 2️⃣ início da correção → venda
+      if (wasOverbought && amrsi <= 70) {
+        amRsiSinalSell.push({
+          index: i,
+          signal: "amrsi-partial-sell",
+          amrsi,
+        });
+        wasOverbought = false; // reseta após sinal
+      }
+
+      /* ---------- SOBREVenda PARCIAL---------- */
+
+      // 3️⃣ entra em sobrevenda
+      if (amrsi <= 20) {
+        wasOversold = true;
+      }
+
+      // 4️⃣ início da correção → compra
+      if (wasOversold && amrsi >= 30) {
+        amRsiSignalBuy.push({
+          index: i,
+          signal: "amrsi-partial-buy",
+          amrsi,
+        });
+        wasOversold = false; // reseta após sinal
+      }
+
+
+
+      /* ---------- SOBRECOMPRA REENTRADA---------- */
+      if (amrsi >= 70) {
+        overboughtReentry = true;
+      }
+      if (overboughtReentry && amrsi <= 65) {
+        amRsiSinalSellReentry.push({
+          index: i,
+          signal: "amrsi-Reentry-sell",
+          amrsi,
+        });
+        overboughtReentry = false; // reseta após sinal
+      }
+
+      /* ---------- SOBREVENDA REENTRADA---------- */
+      if (amrsi <= 30) {
+        oversoldReentry = true;
+      }
+      if (oversoldReentry && amrsi >= 35) {
+        amRsiSignalBuyReentry.push({
+          index: i,
+          signal: "amrsi-Reentry-buy",
+          amrsi,
+        });
+        oversoldReentry = false; // reseta após sinal
+      }
+
+    }
+    /**Guarda dados na variável de estado (SOBREVenda PARCIAL) */
+    setSignalsAmrsiSell(amRsiSinalSell);
+    setSignalsAmrsiBuy(amRsiSignalBuy);
+    /**Guarda dados na variável de estado (SOBREVENDA REENTRADA) */
+    setSignalsAmrsiSellReentry(amRsiSinalSellReentry);
+    setSignalsAmrsiBuyReentry(amRsiSignalBuyReentry)
+
+  }, [simulationValueDataCompleteRsi]);
 
 
 
@@ -1425,8 +1638,6 @@ const ContextApi = (props) => {
       setSimulationLabelData([]);
     }
   }, [realTime]);
-
-
 
 
   useEffect(() => {
@@ -1459,7 +1670,9 @@ const ContextApi = (props) => {
 
 
 
-    /* Executa a cada 15 minutos*/
+    /*----------------------------
+      Executa a cada 15 minutos
+    ------------------------------*/
     if (realTime === "real") {
       const now = new Date();
       const minutes = now.getMinutes();
@@ -1474,7 +1687,7 @@ const ContextApi = (props) => {
         (minutesToWait * 60 * 1000) -
         (seconds * 1000) -
         ms;
-        
+
       // ⏱️ atraso extra de 30 segundos
       delay += 30 * 1000;
 
@@ -1493,10 +1706,11 @@ const ContextApi = (props) => {
     }
 
 
-
-
-
     async function updateAllData() {
+      if (!symbol) {
+        console.warn("⚠️ updateAllData ignorado: symbol vazio");
+        return;
+      }
       try {
         await Promise.all([
           graphicDataOne(symbol),
@@ -1516,6 +1730,7 @@ const ContextApi = (props) => {
     handleRemove,
     values,
     labels,
+    atr,
     dadosPrice,
     theme,
     setTheme,

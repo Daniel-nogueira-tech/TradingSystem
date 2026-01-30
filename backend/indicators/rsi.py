@@ -2,6 +2,7 @@ import pandas as pd
 from datetime import datetime
 from db import get_timeframe_global, get_data_klines, symbolo_saved
 from binance.client import Client
+from klines.klines import get_klines_extended
 
 client = Client()
 
@@ -28,7 +29,9 @@ def get_rsi(symbol, period=14, media_period=6, modo=None, offset=None, limit=Non
         if modo == "simulation":
             klines = get_data_klines(symbol_primary, time)
         else:
-            klines = client.get_klines(symbol=symbol, interval=time, limit=1500)
+            klines = get_klines_extended(
+                symbol=symbol_primary, interval=time, total=2000
+            )
     except Exception as e:
         print(f"❌ Erro ao buscar dados: {str(e)}")
         return []
