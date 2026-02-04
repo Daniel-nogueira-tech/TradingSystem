@@ -36,7 +36,7 @@ def get_vppr(symbol, modo=None, offset=None, limit=None):
         if modo == "simulation":
             klines = get_data_klines(symbol, time)
         else:
-            klines = get_klines_extended(symbol=symbol, interval=time, total=2000)
+            klines = get_klines_extended(symbol=symbol, interval=time, total=2160)
     except Exception as e:
         print(f"❌ Erro ao buscar dados: {str(e)}")
         return []

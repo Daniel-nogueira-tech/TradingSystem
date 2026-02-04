@@ -30,7 +30,7 @@ def get_rsi(symbol, period=14, media_period=6, modo=None, offset=None, limit=Non
             klines = get_data_klines(symbol_primary, time)
         else:
             klines = get_klines_extended(
-                symbol=symbol_primary, interval=time, total=2000
+                symbol=symbol_primary, interval=time, total=2160
             )
     except Exception as e:
         print(f"❌ Erro ao buscar dados: {str(e)}")

@@ -13,6 +13,10 @@ import {
 import { Chart } from "react-chartjs-2";
 import { AppContext } from "../../ContextApi/ContextApi";
 import { useRef } from "react";
+import { ProgressBar } from "primereact/progressbar";
+import { useState } from "react";
+import { useEffect } from "react";
+import { useMemo } from "react";
 
 ChartJS.register(
     CategoryScale,
@@ -26,11 +30,11 @@ ChartJS.register(
 );
 
 
+
 const ChartVppr = () => {
     const { vppr, vpprTime, vpprEma, simulationLabelDataVppr, simulationValueDataVppr, simulationValueDataVpprEma } = useContext(AppContext);
-
-
     const chartRef = useRef();
+    const [progress, setProgress] = useState(0);
 
     /* Função para zoom*/
     const handleZoomIn = () => {
@@ -52,86 +56,99 @@ const ChartVppr = () => {
         })
     );
 
-    const activeValueVppr = simulationValueDataVppr?.length > 0 ? simulationValueDataVppr : vppr
-    const activeLabelVppr = simulationLabelDataVppr?.length > 0 ? simulationLabelDataVppr : labels
-    const activeValueVpprEma = simulationValueDataVpprEma?.length > 0 ? simulationValueDataVpprEma : vpprEma
+    const activeValueVppr = useMemo(() => {
+        return simulationValueDataVppr?.length > 0
+            ? simulationValueDataVppr
+            : vppr;
+    }, [simulationValueDataVppr, vppr]);
+
+    const activeLabelVppr = useMemo(() => {
+        return simulationLabelDataVppr?.length > 0
+            ? simulationLabelDataVppr
+            : labels;
+    }, [simulationLabelDataVppr, labels]);
+
+    const activeValueVpprEma = useMemo(() => {
+        return simulationValueDataVpprEma?.length > 0
+            ? simulationValueDataVpprEma
+            : vpprEma;
+    }, [simulationValueDataVpprEma, vpprEma]);
 
 
+    // Simula carregamento dos dados
+    const isLoading = !(activeValueVppr && activeValueVppr.length > 0);
 
 
-
-    const data = {
-        labels: activeLabelVppr,
-        datasets: [
-            {
-                type: "line",
-                label: "VPPR EMA (week)",
-                data: activeValueVpprEma,
-                borderColor: "rgba(0, 148, 253, 1)",
-                backgroundColor: "rgba(0, 150, 255, 0.3)",
-                tension: 0.3,
-                pointRadius: 0,
-                borderWidth: 2,
-            },
-            {
-                label: 'VPPR',
-                type: "line",
-                data: activeValueVppr,
-                fill: true, // Ativa o preenchimento abaixo da linha
-                backgroundColor: (context) => {
-                    const { chart } = context;
-                    const { ctx, chartArea, scales } = chart;
-                    if (!chartArea) return null;
-
-                    const { y } = scales; // Escala Y
-                    const zeroY = y.getPixelForValue(0); // Posição do Y = 0 no canvas
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-
-                    // Normaliza a posição do zero em relação à área do gráfico
-                    let zeroRatio = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
-                    // Garante que zeroRatio fique no intervalo [0, 1]
-                    zeroRatio = Math.max(0, Math.min(1, zeroRatio));
-
-
-                    // Define o gradiente com base na posição do zero
-                    gradient.addColorStop(0, 'rgba(0, 255, 8, 0.45)');
-                    gradient.addColorStop(zeroRatio, 'rgba(0, 255, 8, 0.11)');
-                    gradient.addColorStop(zeroRatio, 'rgba(255, 0, 0, 0.11)');
-                    gradient.addColorStop(1, 'rgba(255, 0, 0, 0.45)');
-
-                    return gradient;
+    const data = useMemo(() => {
+        return {
+            labels: activeLabelVppr,
+            datasets: [
+                {
+                    type: "line",
+                    label: "VPPR EMA (week)",
+                    data: activeValueVpprEma,
+                    borderColor: "rgba(0, 148, 253, 1)",
+                    backgroundColor: "rgba(0, 150, 255, 0.3)",
+                    tension: 0.3,
+                    pointRadius: 0,
+                    borderWidth: 2,
                 },
-                borderColor: (context) => {
-                    const { chart } = context;
-                    const { ctx, chartArea, scales } = chart;
-                    if (!chartArea) return null;
+                {
+                    label: 'VPPR',
+                    type: "line",
+                    data: activeValueVppr,
+                    fill: true,
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 0,
 
-                    const { y } = scales;
-                    const zeroY = y.getPixelForValue(0);
-                    const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+                    // ⚠️ essas funções continuam dinâmicas, mas o objeto em si não recria sempre
+                    backgroundColor: (context) => {
+                        const { chart } = context;
+                        const { ctx, chartArea, scales } = chart;
+                        if (!chartArea) return null;
 
+                        const zeroY = scales.y.getPixelForValue(0);
+                        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
 
-                    let zeroRatio = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
-                    zeroRatio = Math.max(0, Math.min(1, zeroRatio));
+                        let zeroRatio = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
+                        zeroRatio = Math.max(0, Math.min(1, zeroRatio));
 
-                    gradient.addColorStop(0, 'rgba(0, 255, 8, 1)');
-                    gradient.addColorStop(zeroRatio, 'rgba(0, 255, 8, 0.24)');
-                    gradient.addColorStop(zeroRatio, 'rgba(208, 0, 0, 0.24)');
-                    gradient.addColorStop(1, 'rgb(208, 0, 0)');
+                        gradient.addColorStop(0, 'rgba(0, 255, 8, 0.45)');
+                        gradient.addColorStop(zeroRatio, 'rgba(0, 255, 8, 0.11)');
+                        gradient.addColorStop(zeroRatio, 'rgba(255, 0, 0, 0.11)');
+                        gradient.addColorStop(1, 'rgba(255, 0, 0, 0.45)');
 
-                    return gradient;
+                        return gradient;
+                    },
+
+                    borderColor: (context) => {
+                        const { chart } = context;
+                        const { ctx, chartArea, scales } = chart;
+                        if (!chartArea) return null;
+
+                        const zeroY = scales.y.getPixelForValue(0);
+                        const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+
+                        let zeroRatio = (zeroY - chartArea.top) / (chartArea.bottom - chartArea.top);
+                        zeroRatio = Math.max(0, Math.min(1, zeroRatio));
+
+                        gradient.addColorStop(0, 'rgba(0, 255, 8, 1)');
+                        gradient.addColorStop(zeroRatio, 'rgba(0, 255, 8, 0.24)');
+                        gradient.addColorStop(zeroRatio, 'rgba(208, 0, 0, 0.24)');
+                        gradient.addColorStop(1, 'rgb(208, 0, 0)');
+
+                        return gradient;
+                    },
+
+                    pointBackgroundColor: activeValueVppr.map(v =>
+                        v >= 0 ? 'rgba(0, 255, 8, 1)' : 'rgba(208, 0, 0, 1)'
+                    ),
                 },
+            ],
+        };
+    }, [activeLabelVppr, activeValueVppr, activeValueVpprEma]);
 
-                pointBackgroundColor: vppr.map((value) =>
-                    value >= 0 ? 'rgba(0, 255, 8, 1)' : 'rgba(208, 0, 0, 1)'
-                ),
-                tension: 0.3,
-                borderWidth: 2,
-                pointRadius: 0,
-            },
-
-        ],
-    };
 
     const options = {
         responsive: true,
@@ -185,15 +202,85 @@ const ChartVppr = () => {
         },
     };
 
+
+    //Efeito para animar o progresso
+    useEffect(() => {
+        if (!isLoading) {
+            setProgress(100);
+            return;
+        }
+
+        setProgress(0);
+
+        const interval = setInterval(() => {
+            setProgress(prev => {
+                if (prev >= 99) return prev;
+                return prev + 5;
+            });
+        }, 200);
+
+        return () => clearInterval(interval);
+    }, [isLoading]);
+
+
     return (
-        <div style={{ width: '100%', height: '350px', margin: '10 auto', fontSize: '10px', padding: '15px' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
-                <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>
-                <button className='btn-zoom' onClick={handleZoomOut}>Zoom -</button>
-                <button className='btn-zoom' onClick={handleResetZoom}>Reset</button>
+        isLoading ? (
+            <div
+                style={{
+                    width: "300px",
+                    height: "270px",
+                    margin: "20px auto",
+                    textAlign: "center"
+                }}
+            >
+                <ProgressBar value={progress}
+                    style={{
+                        height: '30px',
+                        top: "110px",
+                        color: '#a54a4a',
+                        backgroundColor: '#e187ff3f'
+                    }} />
             </div>
-            <Chart ref={chartRef} type="bar" data={data} options={options}  plugins={[zoomPlugin]}/>
-        </div>
+        ) : (
+            <>
+                <div
+                    style={{
+                        width: "100%",
+                        height: "350px",
+                        margin: "10px auto",
+                        fontSize: "10px",
+                        padding: "15px"
+                    }}
+                >
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            gap: "10px",
+                            marginBottom: "10px"
+                        }}
+                    >
+                        <button className="btn-zoom" onClick={handleZoomIn}>
+                            Zoom +
+                        </button>
+                        <button className="btn-zoom" onClick={handleZoomOut}>
+                            Zoom -
+                        </button>
+                        <button className="btn-zoom" onClick={handleResetZoom}>
+                            Reset
+                        </button>
+                    </div>
+
+                    <Chart
+                        ref={chartRef}
+                        type="bar"
+                        data={data}
+                        options={options}
+                        plugins={[zoomPlugin]}
+                    />
+                </div>
+            </>
+        )
     );
 };
 

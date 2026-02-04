@@ -1,4 +1,4 @@
-import React, { useRef, useContext } from 'react';
+import React, { useRef, useContext, useMemo } from 'react';
 import zoomPlugin from 'chartjs-plugin-zoom';
 import './MyChart.css';
 import { ProgressBar } from 'primereact/progressbar';
@@ -16,6 +16,7 @@ import { Bar } from 'react-chartjs-2';
 import { AppContext } from '../../ContextApi/ContextApi';
 import { useEffect } from 'react';
 import Swal from 'sweetalert2';
+import { useState } from 'react';
 
 ChartJS.register(
     BarElement,
@@ -52,11 +53,12 @@ const ChartBar = () => {
         showDaysInput,
         setDaysValue,
         setShowDaysInput,
-        days
+        days,
+        windowSize,
+     
     } = useContext(AppContext);
     const chartRef = useRef();
-
-    let trendState = 'neutral';
+    const [progress, setProgress] = useState(0);
 
 
     const handleZoomIn = () => {
@@ -76,40 +78,37 @@ const ChartBar = () => {
 
     const activeValue = simulationValueData?.length > 0 ? simulationValueData : values;
     const activeLabel = simulationLabelData?.length > 0 ? simulationLabelData : labels;
+    const visibleValues = activeValue.slice(-windowSize);
+    const visibleLabels = activeLabel.slice(-windowSize);
+
+    
+
     // Simula carregamento dos dados
     const isLoading = !(activeValue && activeValue.length > 0);
 
 
 
-    const backgroundColor = activeValue.map((valor, index) => {
-        if (index === 0) {
-            return 'rgba(113, 113, 113, 0.6)';
-        }
+const backgroundColor = useMemo(() => {
+    const len = activeValue.length;
+    const result = new Array(len); // Pré-aloca o tamanho do array
+    let trendState = null;
 
-        const diff = valor - activeValue[index - 1];
+    result[0] = 'rgba(113, 113, 113, 0.6)';
 
-        // 🔼 Transição para alta
-        if (diff >= atr) {
-            trendState = 'up';
-        }
+    for (let i = 1; i < len; i++) {
+        const diff = activeValue[i] - activeValue[i - 1];
+        const threshold = atr / 2;
 
-        // 🔽 Transição para baixa
-        if (diff <= -atr) {
-            trendState = 'down';
-        }
+        if (diff >= threshold) trendState = 'up';
+        else if (diff <= -threshold) trendState = 'down';
 
-        // 🎨 Mantém a cor até nova transição
-        if (trendState === 'up') {
-            return 'rgba(0, 255, 0, 0.44)';
-        }
+        if (trendState === 'up') result[i] = 'rgba(0, 255, 0, 0.44)';
+        else if (trendState === 'down') result[i] = 'rgba(255, 0, 0, 0.44)';
+        else result[i] = 'rgba(113, 113, 113, 0.6)';
+    }
 
-        if (trendState === 'down') {
-            return 'rgba(255, 0, 0, 0.44)';
-        }
-
-        return 'rgba(113, 113, 113, 0.6)';
-    });
-
+    return result;
+}, [activeValue, atr]);
 
 
     /* simular trade  (pega a data do back teste)*/
@@ -207,27 +206,38 @@ const ChartBar = () => {
     };
 
     /* pega no localStore se e simulation ou real */
+    // 1. Inicialização direta (Roda apenas UMA vez no carregamento)
+
+    // 2. Efeito de Persistência (Único para o modo)
     useEffect(() => {
-        const modoSalve = localStorage.getItem("realTimeMode");
-        if (modoSalve) {
-            setRealTime(modoSalve)
-        }
-    }, [])
-    useEffect(() => {
-        if (realTime) {
-            localStorage.setItem("realTimeMode", realTime);
-        }
+        localStorage.setItem("real", realTime);
     }, [realTime]);
+
+    // 3. Efeito de Progresso (Melhorado para evitar memory leaks)
+    useEffect(() => {
+        if (!isLoading) {
+            setProgress(100);
+            return;
+        }
+
+        setProgress(0);
+        const interval = setInterval(() => {
+            setProgress(prev => (prev >= 95 ? prev : prev + 5));
+        }, 200);
+
+        return () => clearInterval(interval);
+    }, [isLoading]);
+
 
 
 
     const data = {
-        labels: activeLabel,
+        labels: visibleLabels,
         datasets: [
             {
                 label: 'Tendência',
-                data: activeValue,
-                backgroundColor: backgroundColor,
+                data: visibleValues,
+                backgroundColor: backgroundColor.slice(-windowSize),
                 borderRadius: 6,
             },
         ],
@@ -309,8 +319,8 @@ const ChartBar = () => {
             y: {
                 beginAtZero: false,
                 type: 'linear',
-                suggestedMin: Math.min(...activeValue) * 0.98,
-                suggestedMax: Math.max(...activeValue) * 0.102,
+                suggestedMin: Math.min(...visibleValues) * 0.98,
+                suggestedMax: Math.max(...visibleValues) * 0.102,
             },
         },
     };
@@ -402,7 +412,13 @@ const ChartBar = () => {
             )}
             {isLoading ? (
                 <div style={{ width: "300px", height: "270px", margin: "20px auto", textAlign: "center" }}>
-                    <ProgressBar mode="indeterminate" style={{ height: '8px', top: "110px" }} />
+                    <ProgressBar value={progress}
+                        style={{
+                            height: '30px',
+                            top: "110px",
+                            color: '#a54a4a',
+                            backgroundColor: '#e187ff3f'
+                        }} />
                 </div>
             ) : (
                 < >

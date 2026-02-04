@@ -14,6 +14,8 @@ const Graphics = () => {
     togglePivot,
     setRealTime,
     simulationValueDataComplete,
+    windowSize, 
+    setWindowSize
 
   } = useContext(AppContext);
   const dadosTables = dadosPrice.reverse();
@@ -25,6 +27,9 @@ const Graphics = () => {
     rallySec: false,
     reacaoNatu: false
   });
+
+
+
 
 
   const itemsPerPage = 20;
@@ -161,6 +166,18 @@ const Graphics = () => {
           >
             🔄 Atualizar
           </button>
+
+          <div className='windowSize'>
+            <input
+              type="range"
+              min={100}
+              max={2000}
+              step={100}
+              value={windowSize}
+              onChange={(e) => setWindowSize(Number(e.target.value))}
+            />
+            <p >Candles {windowSize}</p>
+          </div>
 
         </div>
       </div>

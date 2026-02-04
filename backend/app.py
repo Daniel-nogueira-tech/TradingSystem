@@ -101,8 +101,6 @@ def simulate_amrsi():
         }
         for m in amrsi_fatiado
     ]
-    print("dados", dados)
-
     return jsonify(dados)
 
 
@@ -163,8 +161,6 @@ def simulate_vppr():
         }
         for m in vppr_fatiado
     ]
-
-    print("dados_vppr", dados)
     return jsonify(dados)
 
 
@@ -477,7 +473,7 @@ def filter_price_atr():
             clear_table_trend_clarifications()
             # 🔁 Pega os dados em tempo real da Binance
             dados_brutos = get_klines_extended(
-                symbol=symbol_primary, interval=time, total=2000
+                symbol=symbol_primary, interval=time, total=2160
             )
             dados = formatar_dados_brutos(dados_brutos)
 
