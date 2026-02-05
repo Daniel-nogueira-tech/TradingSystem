@@ -40,7 +40,7 @@ ChartJS.register(
 
 
 const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
-   const { rsi, rsiTime, simulationValueDataRsi, simulationLabelDataRsi } = useContext(AppContext);
+   const { rsi, rsiTime, simulationValueDataRsi, simulationLabelDataRsi, windowSize } = useContext(AppContext);
    const chartRef = useRef();
    const [progress, setProgress] = useState(0);
 
@@ -79,18 +79,20 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
 
    const activeValue = simulationValueDataRsi?.length > 0 ? simulationValueDataRsi : value;
    const activeLabel = simulationLabelDataRsi?.length > 0 ? simulationLabelDataRsi : label;
+    const visibleValues = activeValue.slice(-windowSize);
+    const visibleLabels = activeLabel.slice(-windowSize);
    // Simula carregamento dos dados
-   const isLoading = !(activeValue && activeValue.length > 0);
+   const isLoading = !(visibleValues && visibleValues.length > 0);
 
 
 
 
    const data = {
-       labels: activeLabel,
+       labels: visibleLabels,
        datasets: [
            {
                label: 'índice',
-               data: activeValue,
+               data: visibleValues,
                fill: true,
                backgroundColor: (context) => {
                    const { chart } = context;
@@ -184,7 +186,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
            // 🔹 Linha fixa no RSI 20
            {
                label: 'AMRSI 20',
-               data: new Array(activeLabel.length).fill(20), // Linha reta
+               data: new Array(visibleLabels.length).fill(20), // Linha reta
                borderColor: 'white',
                borderWidth: 1,
                borderDash: [5, 5], // Linha tracejada
@@ -193,7 +195,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
            // 🔹 Linha fixa no RSI 80
            {
                label: 'AMRSI 80',
-               data: new Array(activeLabel.length).fill(80),
+               data: new Array(visibleLabels.length).fill(80),
                borderColor: 'white',
                borderWidth: 1,
                borderDash: [5, 5],
@@ -204,7 +206,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
            // 🔹 Linha fixa no RSI 30
            {
                label: 'AMRSI 30',
-               data: new Array(activeLabel.length).fill(30),
+               data: new Array(visibleLabels.length).fill(30),
                borderColor: 'orange',
                borderWidth: 1,
                borderDash: [5, 5],
@@ -215,7 +217,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
            // 🔹 Linha fixa no RSI 30
            {
                label: 'AMRSI 70',
-               data: new Array(activeLabel.length).fill(70),
+               data: new Array(visibleLabels.length).fill(70),
                borderColor: 'orange',
                borderWidth: 1,
                borderDash: [5, 5],
@@ -269,8 +271,8 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
            y: {
                beginAtZero: true,
                type: 'linear',
-               suggestedMin: Math.min(...activeLabel) * 0.98,
-               suggestedMax: Math.max(...activeLabel) * 0.102,
+               suggestedMin: Math.min(...visibleLabels) * 0.98,
+               suggestedMax: Math.max(...visibleLabels) * 0.102,
            },
        },
    };

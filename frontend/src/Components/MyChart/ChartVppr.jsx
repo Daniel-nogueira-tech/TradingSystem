@@ -32,7 +32,7 @@ ChartJS.register(
 
 
 const ChartVppr = () => {
-    const { vppr, vpprTime, vpprEma, simulationLabelDataVppr, simulationValueDataVppr, simulationValueDataVpprEma } = useContext(AppContext);
+    const { vppr, vpprTime, vpprEma, simulationLabelDataVppr, simulationValueDataVppr, simulationValueDataVpprEma,windowSize } = useContext(AppContext);
     const chartRef = useRef();
     const [progress, setProgress] = useState(0);
 
@@ -67,26 +67,30 @@ const ChartVppr = () => {
             ? simulationLabelDataVppr
             : labels;
     }, [simulationLabelDataVppr, labels]);
-
+    
+    
     const activeValueVpprEma = useMemo(() => {
         return simulationValueDataVpprEma?.length > 0
             ? simulationValueDataVpprEma
             : vpprEma;
     }, [simulationValueDataVpprEma, vpprEma]);
 
+    const visibleValuesVppr = activeValueVppr.slice(-windowSize);
+    const visibleLabelsVppr = activeLabelVppr.slice(-windowSize);
+    const visibleValuesVpprEma = activeValueVpprEma.slice(-windowSize);
 
     // Simula carregamento dos dados
-    const isLoading = !(activeValueVppr && activeValueVppr.length > 0);
+    const isLoading = !(visibleValuesVppr  && visibleValuesVppr.length > 0);
 
 
     const data = useMemo(() => {
         return {
-            labels: activeLabelVppr,
+            labels: visibleLabelsVppr,
             datasets: [
                 {
                     type: "line",
                     label: "VPPR EMA (week)",
-                    data: activeValueVpprEma,
+                    data: visibleValuesVpprEma,
                     borderColor: "rgba(0, 148, 253, 1)",
                     backgroundColor: "rgba(0, 150, 255, 0.3)",
                     tension: 0.3,
@@ -96,7 +100,7 @@ const ChartVppr = () => {
                 {
                     label: 'VPPR',
                     type: "line",
-                    data: activeValueVppr,
+                    data: visibleValuesVppr,
                     fill: true,
                     tension: 0.3,
                     borderWidth: 2,
@@ -141,13 +145,13 @@ const ChartVppr = () => {
                         return gradient;
                     },
 
-                    pointBackgroundColor: activeValueVppr.map(v =>
+                    pointBackgroundColor: visibleValuesVppr.map(v =>
                         v >= 0 ? 'rgba(0, 255, 8, 1)' : 'rgba(208, 0, 0, 1)'
                     ),
                 },
             ],
         };
-    }, [activeLabelVppr, activeValueVppr, activeValueVpprEma]);
+    }, [visibleLabelsVppr, visibleValuesVppr, visibleValuesVpprEma]);
 
 
     const options = {
@@ -196,8 +200,8 @@ const ChartVppr = () => {
             y: {
                 beginAtZero: true,
                 type: 'linear',
-                suggestedMin: Math.min(...activeLabelVppr) * 0.98,
-                suggestedMax: Math.max(...activeLabelVppr) * 0.102,
+                suggestedMin: Math.min(...visibleLabelsVppr) * 0.98,
+                suggestedMax: Math.max(...visibleLabelsVppr) * 0.102,
             },
         },
     };

@@ -15,7 +15,7 @@ export const AppContext = createContext();
 const ContextApi = (props) => {
   const url = "http://localhost:5000";
   const [theme, setTheme] = useState(() => { return localStorage.getItem('theme') || 'dark'; });
-  const [windowSize, setWindowSize] = useState(120);
+  const [windowSize, setWindowSize] = useState(1000);
   const [values, setValues] = useState([]);
   const [labels, setLabels] = useState([]);
   const [atr, setAtr] = useState([]);
@@ -27,7 +27,7 @@ const ContextApi = (props) => {
   const [importantPoints, setImportantPoints] = useState([]);
   const [selectedPivots, setSelectedPivots] = useState([]);
   const [realTime, setRealTime] = useState(() => {
-    return localStorage.getItem("real") || "simulation";
+    return localStorage.getItem("realTimeMode") || "simulation";
   });
   const modo = realTime;
   const [rsi, setRsi] = useState([]);
@@ -76,12 +76,13 @@ const ContextApi = (props) => {
   const [isPausedVppr, setIsPausedVppr] = useState(false);
   const isPausedVpprRef = useRef(isPausedVppr);
 
+  const simulationControllerRef = useRef(null);
 
   const toastShownRef = useRef(false);
 
-  let offsetRefPrimary = 0;
-  let offsetRefRsi = 0;
-  let offsetRefVppr = 0;
+  const offsetRefPrimary = useRef(0);
+  const offsetRefRsi = useRef(0);
+  const offsetRefVppr = useRef(0);
 
 
   const period = 14; /* periodo do AMRSI */
@@ -92,7 +93,7 @@ const ContextApi = (props) => {
   --------------------------------------------------*/
 
   const LoadGraphicDataOne = async (savedSymbol) => {
-    if (realTime === "real") {
+    if (realTime === "realTimeMode") {
       await graphicDataOne(savedSymbol);
       await getRsi(savedSymbol);
       await getVppr(savedSymbol);
@@ -149,7 +150,7 @@ const ContextApi = (props) => {
 
   const simulateStepSync = async (symbolPrimary) => {
     // se não estiver em modo simulation, cancela
-    if (realTime !== 'simulation' && dateSimulationStart !== 'Nada') {
+    if (realTime !== 'simulation') {
       console.log("🛑 Simulação cancelada: modo não é 'simulation'");
       return;
     }
@@ -158,8 +159,15 @@ const ContextApi = (props) => {
     clearTimeout(simulationTimeoutSyncRef.current);
 
     try {
+      // Cria novo AbortController para esta iteração
+      if (simulationControllerRef.current) {
+        simulationControllerRef.current.abort();
+      }
+      simulationControllerRef.current = new AbortController();
+      const signal = simulationControllerRef.current.signal;
+
       const fetchOne = async (endpoint, offset) => {
-        const resp = await axios.get(`${endpoint}?offset=${offset}&limit=1`);
+        const resp = await axios.get(`${endpoint}?offset=${offset}&limit=100`, { signal });
         return (resp.data && resp.data.length) ? resp.data[0] : null;
       };
 
@@ -179,7 +187,7 @@ const ContextApi = (props) => {
       }
 
       // 🔹 PRIMARY (driver do tempo)
-      let candleP = await fetchOne(epPrimary, offsetRefPrimary);
+      let candleP = await fetchOne(epPrimary, offsetRefPrimary.current);
       if (!candleP) {
         console.log("✅ Simulação finalizada (primary terminou)");
         return;
@@ -188,16 +196,44 @@ const ContextApi = (props) => {
       const dateP = candleP.closeTime;
       const tp = new Date(dateP).getTime();
 
-      setSimulationValueData(prev => [...prev, parseFloat(candleP.closePrice)]);
-      setSimulationLabelData(prev => [...prev, candleP.closeTime]);
-      setSimulationValueDataComplete(prev => [...prev, candleP]);
+      setSimulationValueData(prev => {
+        const next = [...prev, parseFloat(candleP.closePrice)];
+        return next.length > 2000 ? next.slice(- 2000) : next;
+      });
+      setSimulationLabelData(prev => {
+        const next = [...prev, candleP.closeTime];
+        return next.length > 2000 ? next.slice(- 2000) : next;
+      });
+      setSimulationValueDataComplete(prev => {
+        const next = [...prev, candleP];
+        return next.length > 2000 ? next.slice(- 2000) : next;
+      });
 
-      offsetRefPrimary += 1;
+      offsetRefPrimary.current += 1;
 
-      // 🔹 RSI sincronizado ao primary
+      // 🔹 RSI sincronizado ao primary (fetch em batch, processa até tp)
+      const rsiBatchValues = [];
+      const rsiBatchLabels = [];
+      const rsiBatchComplete = [];
+      
       while (true) {
         if (isPausedRsiRef.current) {
           console.log("⏸️ Pausado durante processamento do RSI. Retomando depois...");
+          // Aplica batch antes de pausar
+          if (rsiBatchValues.length) {
+            setSimulationValueDataRsi(prev => {
+              const next = [...prev, ...rsiBatchValues];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationLabelDataRsi(prev => {
+              const next = [...prev, ...rsiBatchLabels];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationValueDataCompleteRsi(prev => {
+              const next = [...prev, ...rsiBatchComplete];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+          }
           simulationTimeoutSyncRef.current = setTimeout(
             () => simulateStepSync(symbolPrimary),
             300
@@ -205,7 +241,7 @@ const ContextApi = (props) => {
           return;
         }
 
-        let candleRsi = await fetchOne(epRsi, offsetRefRsi);
+        let candleRsi = await fetchOne(epRsi, offsetRefRsi.current);
 
         if (!candleRsi) {
           break;
@@ -223,29 +259,88 @@ const ContextApi = (props) => {
           candleRsi.rsi_ma ??
           candleRsi.rsi;
 
-        setSimulationValueDataRsi(prev => [...prev, parseFloat(value)]);
-        setSimulationLabelDataRsi(prev => [...prev, candleRsi.time]);
-        setSimulationValueDataCompleteRsi(prev => [...prev, candleRsi]);
+        rsiBatchValues.push(parseFloat(value));
+        rsiBatchLabels.push(candleRsi.time);
+        rsiBatchComplete.push(candleRsi);
 
-        // avança para o próximo
-        offsetRefRsi += 4;
+        // avança para o próximo (offset alinhado com limit=100)
+        offsetRefRsi.current += 1;
+      }
+      
+      // Aplica batch RSI ao final do loop
+      if (rsiBatchValues.length) {
+        setSimulationValueDataRsi(prev => {
+          const next = [...prev, ...rsiBatchValues];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+        setSimulationLabelDataRsi(prev => {
+          const next = [...prev, ...rsiBatchLabels];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+        setSimulationValueDataCompleteRsi(prev => {
+          const next = [...prev, ...rsiBatchComplete];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
       }
 
 
-      // 🔹 VPPR sincronizado ao primary
+      // 🔹 VPPR sincronizado ao primary (fetch em batch, processa até tp)
+      const vpprBatchValues = [];
+      const vpprBatchLabels = [];
+      const vpprBatchComplete = [];
+      const vpprBatchEma = [];
+      
       while (true) {
         if (isPausedVpprRef.current) {
           console.log("⏸️ Pausado durante processamento do Vppr. Retomando depois...");
+          // Aplica batch antes de pausar
+          if (vpprBatchValues.length) {
+            setSimulationValueDataVppr(prev => {
+              const next = [...prev, ...vpprBatchValues];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationLabelDataVppr(prev => {
+              const next = [...prev, ...vpprBatchLabels];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationValueDataCompleteVppr(prev => {
+              const next = [...prev, ...vpprBatchComplete];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationValueDataVpprEma(prev => {
+              const next = [...prev, ...vpprBatchEma];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+          }
           simulationTimeoutSyncRef.current = setTimeout(
             () => simulateStepSync(symbolPrimary), 300
           );
           return;
         }
         // pega o próximo candle (driver)
-        let candleVppr = await fetchOne(epVppr, offsetRefVppr);
+        let candleVppr = await fetchOne(epVppr, offsetRefVppr.current);
 
         if (!candleVppr) {
           console.log("✅ Simulação finalizada (Vppr terminou)");
+          // Aplica batch final antes de terminar
+          if (vpprBatchValues.length) {
+            setSimulationValueDataVppr(prev => {
+              const next = [...prev, ...vpprBatchValues];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationLabelDataVppr(prev => {
+              const next = [...prev, ...vpprBatchLabels];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationValueDataCompleteVppr(prev => {
+              const next = [...prev, ...vpprBatchComplete];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+            setSimulationValueDataVpprEma(prev => {
+              const next = [...prev, ...vpprBatchEma];
+              return next.length > 2000 ? next.slice(-2000) : next;
+            });
+          }
           return;
         }
 
@@ -253,19 +348,38 @@ const ContextApi = (props) => {
         let dateVppr = candleVppr.time;
         const tVppr = new Date(dateVppr).getTime();
 
-
         if (tVppr > tp) {
           break;
         }
 
-        // registra o Vppr (use closeTime completo para label, para distinguir múltiplos)
-        setSimulationValueDataVppr(prev => [...prev, parseFloat(candleVppr.vppr)]);
-        setSimulationLabelDataVppr(prev => [...prev, candleVppr.time]);
-        setSimulationValueDataCompleteVppr(prev => [...prev, candleVppr]);
-        setSimulationValueDataVpprEma(prev => [...prev, candleVppr.vppr_ema]);
+        // Acumula no batch local
+        vpprBatchValues.push(parseFloat(candleVppr.vppr));
+        vpprBatchLabels.push(candleVppr.time);
+        vpprBatchComplete.push(candleVppr);
+        vpprBatchEma.push(candleVppr.vppr_ema);
 
-        //avança para o próximo
-        offsetRefVppr += 4;
+        // avança para o próximo (offset alinhado com limit=100)
+        offsetRefVppr.current += 1;
+      }
+      
+      // Aplica batch VPPR ao final do loop
+      if (vpprBatchValues.length) {
+        setSimulationValueDataVppr(prev => {
+          const next = [...prev, ...vpprBatchValues];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+        setSimulationLabelDataVppr(prev => {
+          const next = [...prev, ...vpprBatchLabels];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+        setSimulationValueDataCompleteVppr(prev => {
+          const next = [...prev, ...vpprBatchComplete];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+        setSimulationValueDataVpprEma(prev => {
+          const next = [...prev, ...vpprBatchEma];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
       }
 
       // agenda próxima iteração (próximo Vppr + catch-up)
@@ -274,8 +388,13 @@ const ContextApi = (props) => {
       }, 300);
 
     } catch (error) {
-      console.error("❌ Erro na simulateStepSync:", error);
+      if (error.name !== 'CanceledError') {
+        console.error("❌ Erro na simulateStepSync:", error);
+      }
       clearTimeout(simulationTimeoutSyncRef.current);
+      if (simulationControllerRef.current) {
+        simulationControllerRef.current.abort();
+      }
     }
   };
 
@@ -359,7 +478,7 @@ const ContextApi = (props) => {
       for (let i = 0; i < len; i++) {
         const candle = data[i];
         prices[i] = Number(candle.closePrice);
-        labelsArr[i] = candle.closeTime; // ou formatado, se quiser
+        labelsArr[i] = candle.closeTime;
       }
 
       const atrLast = Number(data[len - 1].limite);
@@ -368,6 +487,7 @@ const ContextApi = (props) => {
       setValues(prices);
       setLabels(labelsArr);
       setAtr(atrLast);
+      setDadosPrice(data);
 
     } catch (error) {
       console.error("❌ Erro ao buscar dados:", error);
@@ -417,7 +537,6 @@ const ContextApi = (props) => {
       console.error('Erro ao buscar dados:', error);
     }
     inputRefMain.current.value = "";
-
   };
   /*----------------------------
     🔍1️⃣ Busca o simbolo Primária
@@ -1131,7 +1250,7 @@ const ContextApi = (props) => {
     }
 
 
-
+   /**Função auxiliar para gerar id para unica execução */
     function buildEventId(pivo, reaction) {
       if (!pivo || !reaction) return null;
       return `${pivo.closeTime}-${reaction.closeTime}`;
@@ -1140,7 +1259,6 @@ const ContextApi = (props) => {
     // ===============================
     //  RETESTE DE TENDÊNCIA
     // ===============================
-
     if (pivo && naturalReaction) {
       const atr = pivo.atr;
       const tolerance = atr / 3;
@@ -1153,8 +1271,7 @@ const ContextApi = (props) => {
 
       if (eventId && lastTrendRetestIdRef.current !== eventId) {
         lastTrendRetestIdRef.current = eventId;
-
-        // 🟢 Compra
+        // 🟢 RETESTE DE COMPRA
         if (
           ultimoTopoAlta &&
           currentTrend === "Tendência Alta" &&
@@ -1170,7 +1287,7 @@ const ContextApi = (props) => {
           ]);
         }
 
-        // 🔴 Venda
+        // 🔴 RETESTE DE VENDA
         if (
           ultimoFundoBaixa &&
           currentTrend === "Tendência Baixa" &&
@@ -1203,8 +1320,7 @@ const ContextApi = (props) => {
 
       if (eventId && lastTrendExitIdRef.current !== eventId) {
         lastTrendExitIdRef.current = eventId;
-
-        // 🟢
+        // 🟢 SAÍDA DE COMPRA
         if (
           currentTrend === "Tendência Alta" &&
           naturalRally.closePrice >= low &&
@@ -1217,7 +1333,7 @@ const ContextApi = (props) => {
             { name: "type", value: "EXIT_BUY_TREND" }
           ]);
         }
-        // 🔴
+        // 🔴 SAÍDA DE VENDA
         if (
           currentTrend === "Tendência Baixa" &&
           naturalRally.closePrice >= low &&
@@ -1263,7 +1379,6 @@ const ContextApi = (props) => {
             { name: "type", value: "ENTRY_BUY_RALLY" }
           ]);
         }
-
         // 🔴 Venda rally
         if (
           currentTrend === "Tendência Baixa" &&
@@ -1280,7 +1395,7 @@ const ContextApi = (props) => {
         }
       }
     }
-       
+
     // ===============================
     // SAÍDA DE RALLY
     // ===============================
@@ -1296,8 +1411,7 @@ const ContextApi = (props) => {
 
       if (eventId && lastRallyExitIdRef.current !== eventId) {
         lastRallyExitIdRef.current = eventId;
-
-        // 🟢
+        // 🟢 SAÍDA DE COMPRA
         if (
           currentTrend === "Tendência Alta" &&
           naturalRally.closePrice >= low &&
@@ -1310,7 +1424,7 @@ const ContextApi = (props) => {
             { name: "type", value: "EXIT_BUY_RALLY" }
           ]);
         }
-        // 🔴
+        // 🔴 SAÍDA DE VENDA
         if (
           currentTrend === "Tendência Baixa" &&
           naturalRally.closePrice >= low &&
@@ -1350,7 +1464,6 @@ const ContextApi = (props) => {
           currentTrend === "Tendência Alta" &&
           naturalReactionSec.closePrice <= high &&
           naturalReactionSec.closePrice >= low
-
         ) {
           setRetestPoints([
             { name: "pivot", value: pivoRallyPrimary },
@@ -1439,7 +1552,6 @@ const ContextApi = (props) => {
 
       if (lastBreakoutIdRef.current !== pivotId) {
         lastBreakoutIdRef.current = pivotId;
-
         // 🟢
         if (
           currentTrend === "Tendência Alta" &&
@@ -1649,7 +1761,6 @@ const ContextApi = (props) => {
       }
 
       /* ---------- SOBREVenda PARCIAL---------- */
-
       // 3️⃣ entra em sobrevenda
       if (amrsi <= 20) {
         wasOversold = true;
@@ -1666,7 +1777,6 @@ const ContextApi = (props) => {
       }
 
 
-
       /* ---------- SOBRECOMPRA REENTRADA---------- */
       if (amrsi >= 70) {
         overboughtReentry = true;
@@ -1680,6 +1790,7 @@ const ContextApi = (props) => {
         overboughtReentry = false; // reseta após sinal
       }
 
+
       /* ---------- SOBREVENDA REENTRADA---------- */
       if (amrsi <= 30) {
         oversoldReentry = true;
@@ -1692,7 +1803,6 @@ const ContextApi = (props) => {
         });
         oversoldReentry = false; // reseta após sinal
       }
-
     }
     /**Guarda dados na variável de estado (SOBREVenda PARCIAL) */
     setSignalsAmrsiSell(amRsiSinalSell);
@@ -1705,20 +1815,55 @@ const ContextApi = (props) => {
 
 
 
-
-  useEffect(() => {
-    if (realTime === "real") {
-      clearTimeout(simulationTimeoutRef.current);
-      offsetRefPrimary = 0;
-      setSimulationValueData([]);
-      setSimulationLabelData([]);
-    }
-  }, [realTime]);
-
-
+/**========================================================================
+ * limpeza que limpa todos os tempos limite e intervalos na desmontagem: 
+ * ========================================================================*/
   useEffect(() => {
     isPausedRef.current = isPaused;
   }, [isPaused]);
+
+  useEffect(() => {
+    isPausedRsiRef.current = isPausedRsi;
+  }, [isPausedRsi]);
+
+  useEffect(() => {
+    isPausedVpprRef.current = isPausedVppr;
+  }, [isPausedVppr]);
+
+  useEffect(() => {
+    if (realTime === "realTimeMode") {
+      clearTimeout(simulationTimeoutRef.current);
+      clearTimeout(simulationTimeoutSyncRef.current);
+      offsetRefPrimary.current = 0;
+      offsetRefRsi.current = 0;
+      offsetRefVppr.current = 0;
+      if (simulationControllerRef.current) {
+        simulationControllerRef.current.abort();
+      }
+      setSimulationValueData([]);
+      setSimulationLabelData([]);
+      setSimulationValueDataRsi([]);
+      setSimulationLabelDataRsi([]);
+      setSimulationValueDataVppr([]);
+      setSimulationLabelDataVppr([]);
+    }
+  }, [realTime]);
+
+  /**Limpeza de temporizador/intervalo e desmontagem segura 🚿 */
+  useEffect(() => {
+    return () => {
+      clearTimeout(simulationTimeoutSyncRef.current);
+      clearTimeout(simulationTimeoutRef.current);
+      clearTimeout(simulationRsiTimeoutRef.current);
+      clearTimeout(simulationVpprTimeoutRef.current);
+      if (simulationControllerRef.current) {
+        simulationControllerRef.current.abort();
+      }
+    }
+  }, []);
+
+
+
 
 
   useEffect(() => {
@@ -1726,14 +1871,12 @@ const ContextApi = (props) => {
       try {
         const savedSymbol = await getSymbol();
 
-
         if (savedSymbol) {
           await Promise.all([
             LoadGraphicDataOne(savedSymbol),
             handleGetTime(),
             handleGetPoints(),
             getDateSimulation(),
-
           ], [savedSymbol]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
@@ -1749,15 +1892,14 @@ const ContextApi = (props) => {
     /*----------------------------
       Executa a cada 15 minutos
     ------------------------------*/
-    if (realTime === "real") {
+    if (realTime === "realTimeMode") {
       const now = new Date();
       const minutes = now.getMinutes();
       const seconds = now.getSeconds();
       const ms = now.getMilliseconds();
 
       const nextQuarter = Math.ceil(minutes / 15) * 15;
-      const minutesToWait =
-        nextQuarter === 60 ? 60 - minutes : nextQuarter - minutes;
+      const minutesToWait = nextQuarter === 60 ? 60 - minutes : nextQuarter - minutes;
 
       let delay =
         (minutesToWait * 60 * 1000) -
@@ -1773,14 +1915,12 @@ const ContextApi = (props) => {
 
       setTimeout(() => {
         updateAllData();
-
         setInterval(() => {
           updateAllData();
         }, 15 * 60 * 1000);
 
       }, delay);
     }
-
 
     async function updateAllData() {
       if (!symbol) {

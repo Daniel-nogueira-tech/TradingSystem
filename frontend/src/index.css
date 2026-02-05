@@ -20,7 +20,7 @@
   --background: radial-gradient(#2a202e, #1a1a1a);
   --background-basis: background-color: #242424;
   --background-side: #1c1c20;
-  --box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
+  --box-shadow: 2px 0 10px rgba(0, 0, 0, 0.8);
   --box-shadow-active: 0px 0px 5px 5px rgba(156, 156, 156, 0.2);
   --background-color-button: rgb(48, 48, 48);
   --background-color-button-active: rgb(105, 105, 105);
@@ -35,16 +35,17 @@
   --button-positive: rgb(0, 255, 136);
   --button-positive-active: rgb(7, 186, 102);
   --button-gray: #b5b5b5;
+  --font-global:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
 
 }
 
 body.clear-theme {
-  --navbar-color-active: radial-gradient(#de9bff62, #9b9b9b);
-  --navbar-color: radial-gradient(#bca6c581, #bababa);
-  --background: radial-gradient(#624e75, #1f1f1f);
+  --navbar-color-active: radial-gradient(#cb63ff6e, #9b9b9b);
+  --navbar-color: radial-gradient(#bca6c5ae, #bababa);
+  --background: radial-gradient(#3c214887, #181818);
   --background-basis: #f5f5f5;
   --background-side: #211b26;
-  --box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  --box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
   --box-shadow-active: 0px 0px 5px 5px rgba(156, 156, 156, 0.1);
   --background-color-button: #949494;
   --background-color-button-active: #d0d0d0;

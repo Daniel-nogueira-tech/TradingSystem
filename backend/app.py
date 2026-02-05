@@ -1,5 +1,4 @@
-from flask import Flask, jsonify
-from flask import request, jsonify
+from flask import Flask, jsonify,request, jsonify
 from flask_cors import CORS
 import pandas as pd
 from binance.client import Client
@@ -85,7 +84,7 @@ def api_rsi():
 @app.route("/api/simulate_amrsi", methods=["GET"])
 def simulate_amrsi():
     offset = int(request.args.get("offset", 0))
-    limit = int(request.args.get("limit", 10))
+    limit = int(request.args.get("limit", 100))
 
     amrsi = get_data_rsi()
 
@@ -143,7 +142,7 @@ def api_vppr():
 @app.route("/api/simulate_vppr", methods=["GET"])
 def simulate_vppr():
     offset = int(request.args.get("offset", 0))
-    limit = int(request.args.get("limit", 10))
+    limit = int(request.args.get("limit", 100))
 
     vppr = get_data_vppr()
 
@@ -396,7 +395,7 @@ def download_and_save_klines(
 @app.route("/api/simulate_price_atr", methods=["GET"])
 def simulate_price_atr():
     offset = int(request.args.get("offset", 0))
-    limit = int(request.args.get("limit", 10))
+    limit = int(request.args.get("limit", 100))
 
     movimentos = get_trend_clarifications()
 

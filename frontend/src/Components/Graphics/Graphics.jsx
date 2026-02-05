@@ -4,17 +4,19 @@ import Chart from '../MyChart/Chart '
 import ChartRsi from '../MyChart/ChartRsi';
 import ChartVppr from '../MyChart/ChartVppr';
 import { AppContext } from '../../ContextApi/ContextApi';
+import 'primeicons/primeicons.css';
 
 
 const Graphics = () => {
-  const { dadosPrice,
+  const { 
+    dadosPrice,
     activeButton,
     handleClickTime,
     importantPoints,
     togglePivot,
     setRealTime,
     simulationValueDataComplete,
-    windowSize, 
+    windowSize,
     setWindowSize
 
   } = useContext(AppContext);
@@ -30,11 +32,7 @@ const Graphics = () => {
 
 
 
-
-
   const itemsPerPage = 20;
-
-
 
   const activeTable = simulationValueDataComplete?.length > 0 ? simulationValueDataComplete : dadosTables;
 
@@ -130,6 +128,9 @@ const Graphics = () => {
   };
 
 
+  ///
+
+
   return (
     <div className='graphics-main' >
       <div className='time-frame'>
@@ -160,24 +161,31 @@ const Graphics = () => {
           <button
             className="button-time"
             onClick={() => {
-              setRealTime('real');
+              setRealTime('realTimeMode');
               window.location.reload();
             }}
           >
-            🔄 Atualizar
+            <span className="pi pi-sync"></span>
           </button>
 
-          <div className='windowSize'>
-            <input
-              type="range"
-              min={100}
-              max={2000}
-              step={100}
-              value={windowSize}
-              onChange={(e) => setWindowSize(Number(e.target.value))}
-            />
-            <p >Candles {windowSize}</p>
+          <div className='range'>
+            <div className='sliderValue'>
+              <span>{windowSize}</span>
+            </div>
+            <div className='field'>
+              <div className='value left'></div>
+              <input
+                type="range"
+                min={100}
+                max={2000}
+                step={100}
+                value={windowSize}
+                onChange={(e) => setWindowSize(Number(e.target.value))}
+              />
+
+            </div>
           </div>
+
 
         </div>
       </div>
@@ -189,9 +197,6 @@ const Graphics = () => {
 
         <div>
           <h3>Dados das operações</h3>
-          <div className='price' >
-            <p>Ultimo preço: 330.524</p>
-          </div>
           <div className='price' >
             <p>Preço médio: 330.524</p>
           </div>
@@ -242,7 +247,7 @@ const Graphics = () => {
               <div
                 className={`price ${activeStates.reacaoNatu ? "active" : ""}`}
                 onClick={() =>
-                  handleClick("reacaoNatu", importantPoints?.["Reação Natural"]?.price?.toFixed(2))
+                  handleClick("reacaoNatural", importantPoints?.["Reação Natural"]?.price?.toFixed(2))
                 }
               >
                 <p>

@@ -11,6 +11,7 @@
   padding: 12px;
   width: 100%;
   height: auto;
+  animation: fadeIns 3s ease;
 }
 
 .content-wrapper {
@@ -46,7 +47,6 @@
   align-items: center;
   box-shadow: var(--box-shadow);
   transition: 0.5s ease;
-  animation: fadeIns 1s ease;
 }
 
 .container-results:hover {

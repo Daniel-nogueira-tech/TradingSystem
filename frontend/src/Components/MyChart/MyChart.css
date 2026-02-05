@@ -72,6 +72,12 @@
     padding: 5px;
     border-radius: 8px;
     border: none;
+    transition: 0.3s ease;
+}
+.btn-zoom:hover {
+    background-color: var(--background-table);
+    transform: scale(1.3);
+    cursor: pointer;
 }
 
 /*button simulation*/
@@ -108,6 +114,15 @@
     margin-top: 10px;
 }
 
+.pi-play, .pi-pause {
+    width: 50px;
+    font-size: 16px;
+    transition: 0.2s ease;
+}
+.pi-play:hover, .pi-pause:hover {
+    color: var(--black);
+    transform: scale(1.5);
+}
 @media (max-width: 1900px) {
     .MyChart-analysis {
         width: 100%;

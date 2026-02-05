@@ -17,6 +17,7 @@ import { AppContext } from '../../ContextApi/ContextApi';
 import { useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { useState } from 'react';
+import 'primeicons/primeicons.css';
 
 ChartJS.register(
     BarElement,
@@ -41,7 +42,6 @@ const ChartBar = () => {
         simulationLabelData,
         simulationValueData,
         realTime,
-        setRealTime,
         isPaused,
         setIsPaused,
         dateSimulationStart,
@@ -210,7 +210,7 @@ const backgroundColor = useMemo(() => {
 
     // 2. Efeito de Persistência (Único para o modo)
     useEffect(() => {
-        localStorage.setItem("real", realTime);
+        localStorage.setItem("realTimeMode", realTime);
     }, [realTime]);
 
     // 3. Efeito de Progresso (Melhorado para evitar memory leaks)
@@ -359,7 +359,7 @@ const backgroundColor = useMemo(() => {
                             className='btn-zoom'
                             onClick={() => setIsPaused(prev => !prev)}
                         >
-                            {isPaused ? '▶️ Continuar' : '⏸️ Pausar'}
+                            {isPaused ? <span className='pi pi-play' ></span> : <span className='pi pi-pause' ></span>}
                         </button>
                     )}
 
