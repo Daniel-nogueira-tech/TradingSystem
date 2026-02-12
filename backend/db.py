@@ -1,11 +1,22 @@
 import sqlite3, os
+import json
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, "database.db")
 
 
 def conectar():
-    return sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(
+        DB_PATH,
+        timeout=10,
+        check_same_thread=False
+    )
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    return conn
+
+
+
 
 
 # ============================
@@ -119,9 +130,27 @@ def clear_table_trend_clarifications():
     conn = conectar()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM trend_clarifications")
+    print("🗑️ Deletando todos os registros da tabela trend_clarifications...")
     conn.commit()
     conn.close()
-
+    
+# Limpa todos os dados (opcional, se for sobrescrever)
+def clear_table_amrsi():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM amrsi")
+    print("🗑️ Deletando todos os registros da tabela amrsi")
+    conn.commit()
+    conn.close()
+    
+# Limpa todos os dados (opcional, se for sobrescrever)
+def clear_table_vppr():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM vppr")
+    print("🗑️ Deletando todos os registros da tabela vppr")
+    conn.commit()
+    conn.close()
 
 # Salva os dados classificados
 def save_trend_clarifications(movimentos):
@@ -412,13 +441,17 @@ def save_atr(atr_soft):
     cursor = conn.cursor()
 
     cursor.execute("DELETE FROM atr")
-
     # transforma em lista de tuplas (time, atr)
     atr = [(d["Tempo"], d.get("atr_soft")) for d in atr_soft]
 
     # Inserção em massa
     cursor.executemany(
-        "INSERT INTO atr(Tempo, atr_soft) VALUES (?, ?)",
+        """
+        INSERT INTO atr(Tempo, atr_soft) 
+        VALUES (?, ?)
+        ON CONFLICT(Tempo) DO UPDATE SET
+        atr_soft = excluded.atr_soft
+        """,
         atr,
     )
     conn.commit()
@@ -475,8 +508,6 @@ def save_rsi(data):
     conn = conectar()
     cursor = conn.cursor()
 
-    # Se você quer sobrescrever tudo:
-    cursor.execute("DELETE FROM amrsi")
 
     # transforma em lista de tuplas (time, amrsi)
     amrsi = [
@@ -486,7 +517,12 @@ def save_rsi(data):
 
     # Inserção em massa
     cursor.executemany(
-        "INSERT INTO amrsi(time, amrsi) VALUES (?, ?)",
+        """
+        INSERT INTO amrsi(time, amrsi)
+        VALUES (?, ?)
+        ON CONFLICT(time) DO UPDATE SET
+        amrsi = excluded.amrsi
+        """,
         amrsi,
     )
 
@@ -537,17 +573,21 @@ def save_vppr(data):
     conn = conectar()
     cursor = conn.cursor()
 
-    # para sobrescrever tudo:
-    cursor.execute("DELETE FROM vppr")
-
     # transforma em lista de tuplas (time,vppr)
     vppr = [(d["time"], d["vppr"], d["vppr_ema"]) for d in data]
 
     # Inserção em massa
     cursor.executemany(
-        "INSERT INTO vppr(time,vppr,vppr_ema) VALUES (?,?,?)",
-        vppr,
-    )
+       """
+        INSERT INTO vppr(time, vppr, vppr_ema)
+        VALUES (?, ?, ?)
+        ON CONFLICT(time) DO UPDATE SET
+        vppr = excluded.vppr,
+        vppr_ema = excluded.vppr_ema
+       """,
+       vppr
+)
+
 
     conn.commit()
     conn.close()
@@ -567,3 +607,56 @@ def get_data_vppr():
     result = cursor.fetchall()
     conn.close()
     return result
+# -------------------------------------------------------------------
+# Função para salvar observações de mercado no banco de dados
+# -------------------------------------------------------------------
+def save_market_observations(symbol, notes):
+    # 👉 injeta o símbolo em cada registro
+    for candle in notes:
+        candle["symbol"] = symbol
+
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS market_observations (
+            symbol TEXT PRIMARY KEY,
+            notes TEXT
+        )
+    """)
+
+    notes_json = json.dumps(notes, ensure_ascii=False)
+
+    cursor.execute(
+        """
+        INSERT OR REPLACE INTO market_observations (symbol, notes)
+        VALUES (?, ?)
+        """,
+        (symbol, notes_json),
+    )
+
+    conn.commit()
+    conn.close()
+# Retorna a ultima linha por simbolo (observação mais recente)
+def get_latest_market_by_symbol():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT symbol, notes
+        FROM market_observations
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    result = []
+    for symbol, notes in rows:
+        data = json.loads(notes)
+        # pega o último candle do JSON
+        last = data[-1] if isinstance(data, list) and data else {}
+        last["symbol"] = symbol
+        result.append(last)
+    return result
+
+

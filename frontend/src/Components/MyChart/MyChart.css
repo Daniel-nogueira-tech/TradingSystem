@@ -121,7 +121,6 @@
 }
 .pi-play:hover, .pi-pause:hover {
     color: var(--black);
-    transform: scale(1.5);
 }
 @media (max-width: 1900px) {
     .MyChart-analysis {

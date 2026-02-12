@@ -19,6 +19,7 @@ def get_klines_extended(symbol, interval, total=2000):
         )
 
         if not klines:
+            print("Não é possivel baixar os dados da Binance")
             break
 
         # evita duplicar candles
@@ -40,11 +41,11 @@ def get_klines_extended(symbol, interval, total=2000):
 # --------------------------------------------------------
 # Função para formatar os dados brutos da API da Binance
 # --------------------------------------------------------
-def formatar_dados_brutos(dados_brutos):
-    dados_formatados = []
+def format_raw_data(raw_data):
+    formatted_data = []
 
-    for k in dados_brutos:
-        dado = {
+    for k in raw_data:
+        data = {
             "Tempo": datetime.fromtimestamp(k[0] / 1000).strftime("%Y-%m-%d %H:%M:%S"),
             "Abertura": float(k[1]),
             "Maximo": float(k[2]),
@@ -52,6 +53,6 @@ def formatar_dados_brutos(dados_brutos):
             "Fechamento": float(k[4]),
             "Volume": float(k[5]),
         }
-        dados_formatados.append(dado)
+        formatted_data.append(data)
 
-    return dados_formatados
+    return formatted_data
