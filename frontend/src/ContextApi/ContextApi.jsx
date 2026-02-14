@@ -36,7 +36,8 @@ const ContextApi = (props) => {
   const [vpprTime, setVpprTime] = useState([]);
   const [vpprEma, setVpprEma] = useState([]);
   const [addSymbol, setAddSymbol] = React.useState('');// nova variável de estado para armazenar o símbolo a ser adicionado
-
+  const [removeSymbol, setRemoveSymbol] = React.useState('') // remover simbolos
+  const [data, setData] = React.useState([]);
 
   const [dateSimulationStart, setDateSimulationStart] = useState("")
   const [dateSimulationEnd, setDateSimulationEnd] = useState("")
@@ -729,7 +730,7 @@ const ContextApi = (props) => {
 
     try {
       const { data } = await axios.post(`${url}/api/market_observation`, {
-        symbol: addSymbol.trim().toUpperCase(), // 👈 AQUI
+        symbol: addSymbol.trim().toUpperCase(),
         total: 2000
       });
 
@@ -742,14 +743,25 @@ const ContextApi = (props) => {
 
       setAddSymbol('');
       getMarketObservation(); // Atualiza a lista de observações após adicionar
+      
+      // 🔄 Atualiza imediatamente todos os símbolos salvos
+      try {
+        const response = await axios.get(`${url}/api/update_market_observations`);
+        if (response.data?.updated_symbols) {
+          const successful = response.data.updated_symbols.filter(u => u.status === 'atualizado').length;
+          console.log(`✅ ${successful} observações de mercado atualizadas após adicionar novo símbolo`);
+        }
+      } catch (updateError) {
+        console.warn("⚠️ Erro ao atualizar observações de mercado:", updateError.response?.data || updateError.message);
+      }
 
     } catch (error) {
       console.error("Erro:", error);
     }
   };
-
-
-
+  /**=========================================
+   * pega os dados para observação de mercado
+   * =========================================*/
   const getMarketObservation = async () => {
     try {
       const response = await axios.get(`${url}/api/latest_market_observation`);
@@ -758,6 +770,36 @@ const ContextApi = (props) => {
       console.error("Erro ao buscar observações de mercado:", error);
     }
   };
+  const handleRemoveSymbol = async (symbol) => {
+    try {
+      const response = await axios.post(`${url}/api/remove_symbol_market_observation`, {
+        symbol: symbol
+      });
+      const data = response.data
+
+      if (data) {
+        setData(prev =>
+          prev.filter(item => item.symbol !== symbol)
+        );
+        // ✅ Toast de sucesso
+        toast.current.show({
+          severity: "success",
+          summary: "Modo",
+          detail: `símbolo removido! ${symbol}`,
+          life: 1500
+        });
+      }
+    } catch (error) {
+      // ❌ Toast de erro
+      toast.current.show({
+        severity: 'error',
+        summary: '',
+        detail: `Erro ao remover símbolo! ${symbol}`,
+        life: 5000
+      });
+      console.error("Erro ao buscar observações de mercado:", error);
+    }
+  }
 
 
   const handleSave = () => {
@@ -828,7 +870,6 @@ const ContextApi = (props) => {
 
 
 
-
   /*#####################################################################
                         🎯logica de compra e venda início🎯
 ########################################################################*/
@@ -858,7 +899,6 @@ const ContextApi = (props) => {
   const lastRallyExitIdRef = useRef(null);
   const lastSecondaryExitIdRef = useRef(null);
   const lastBreakoutIdRef = useRef(null);
-  const lastBreakoutRetestIdRef = useRef(null);
   const canExecuteRallyRef = useRef(false);
   const canExecuteReactionRef = useRef(false);
   const canExecuteReactionSecRef = useRef(false);
@@ -1975,13 +2015,23 @@ const ContextApi = (props) => {
         return;
       }
       try {
+        // 🔄 Atualiza todas as observações de mercado salvos (não bloqueia o resto)
+        axios.get(`${url}/api/update_market_observations`)
+          .then(res => {
+            if (res.data?.updated_symbols) {
+              const successful = res.data.updated_symbols.filter(u => u.status === 'atualizado').length;
+              console.log(`✅ ${successful} observações atualizadas`);
+            }
+          })
+          .catch(err => console.warn("⚠️ Erro ao atualizar observações:", err.message));
+        
         await Promise.all([
           graphicDataOne(symbol),
           handleGetPoints(),
           saveMarketNotes(),
           getMarketObservation(),
           getRsi(symbol),
-          getVppr(symbol)
+          getVppr(symbol),
         ]);
         console.log("✅ Dados atualizados em", new Date().toLocaleTimeString());
       } catch (error) {
@@ -2043,7 +2093,11 @@ const ContextApi = (props) => {
     marketObservation,
     addSymbol,
     setAddSymbol,
-    saveMarketNotes
+    saveMarketNotes,
+    setRemoveSymbol,
+    data,
+    setData,
+    handleRemoveSymbol
   };
 
   return (

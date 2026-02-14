@@ -2,18 +2,30 @@ import React from 'react';
 import './Market.css';
 import { AppContext } from '../../ContextApi/ContextApi';
 import 'primeicons/primeicons.css';
+import { Dialog } from 'primereact/dialog';
+
 
 import { Messages } from 'primereact/messages';
+import ChartMarketObservation from '../MyChart/ChartMarketObservation';
 
 
 const Market = () => {
-  const { marketObservation, addSymbol, setAddSymbol, saveMarketNotes } = React.useContext(AppContext);
+  const { marketObservation, addSymbol, setAddSymbol, saveMarketNotes, handleRemoveSymbol, data, setData } = React.useContext(AppContext);
 
-  const [data, setData] = React.useState([]);
   const [filterSymbol, setFilterSymbol] = React.useState('');
   const [showFilter, setShowFilter] = React.useState(false);
   const [newSymbol, setNewSymbol] = React.useState(false);
+  const [showChart, setShowChart] = React.useState(false);
+  const [selectedSymbol, setSelectedSymbol] = React.useState(null);
+
   const msgs = React.useRef(null);
+
+
+
+  const openChart = (symbol) => {
+    setSelectedSymbol(symbol);
+    setShowChart(true);
+  };
 
 
 
@@ -23,11 +35,7 @@ const Market = () => {
     }
   }, [marketObservation]);
 
-  const handleRemove = (symbol) => {
-    setData(prev =>
-      prev.filter(item => item.symbol !== symbol)
-    );
-  };
+
 
   const filteredData = data.filter(item =>
     item.symbol.toUpperCase().includes(filterSymbol.toUpperCase())
@@ -111,7 +119,7 @@ const Market = () => {
 
                       saveMarketNotes();
                       setAddSymbol('');
-                      setNewSymbol(false);
+
                       msgs.current.clear();
                     }}
                   >
@@ -142,35 +150,57 @@ const Market = () => {
 
           <tbody>
             {filteredData.map((item, index) => (
-              <tr key={index}>
-                <td>{item.symbol}</td>
+              <React.Fragment key={index}>
+                <tr>
+                  <td className='expand'>
+                    {item.symbol}
+                    <span
+                      className='pi pi-arrow-up-right-and-arrow-down-left-from-center'
+                      onClick={() => openChart(item.symbol)}
+                    ></span>
 
-                <td className={item.variacao < 0 ? 'negative' : 'positive'}>
-                  {item.variacao_pct}%
-                </td>
-                <td className={item.variacao < 0 ? 'negative' : 'positive'}>
-                  {item.variacao}
-                </td>
+                  </td>
 
-                <td>{item.Fechamento}</td>
+                  <td className={item.variacao < 0 ? 'negative' : 'positive'}>
+                    {item.variacao_pct}%
+                  </td>
 
-                <td>{item.Maximo}</td>
-                <td>{item.Minimo}</td>
+                  <td className={item.variacao < 0 ? 'negative' : 'positive'}>
+                    {item.variacao}
+                  </td>
 
-                <td>{item.Volume}</td>
+                  <td>{item.Fechamento}</td>
+                  <td>{item.Maximo}</td>
+                  <td>{item.Minimo}</td>
+                  <td>{item.Volume}</td>
 
-                <td>
-                  <button
-                    className="remove-btn"
-                    onClick={() => handleRemove(item.symbol)}
-                  >
-                    <span className="pi pi-trash" />
-                  </button>
-                </td>
-              </tr>
+                  <td>
+                    <button
+                      className="remove-btn"
+                      onClick={() => handleRemoveSymbol(item.symbol)}
+                    >
+                      <span className="pi pi-trash" />
+                    </button>
+                  </td>
+                </tr>
+
+              </React.Fragment>
             ))}
+
           </tbody>
         </table>
+        <Dialog
+        style={ {padding:'20px',justifyContent: 'center'}}
+          header={`Gráfico - ${selectedSymbol}`}
+          visible={showChart}
+          onHide={() => setShowChart(false)}
+          maximizable
+        >
+          {selectedSymbol && (
+            <ChartMarketObservation symbol={selectedSymbol} />
+          )}
+        </Dialog>
+
       </div>
     </div>
   );

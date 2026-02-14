@@ -38,7 +38,9 @@ from db import (
     save_market_observations,
     get_latest_market_by_symbol,
     clear_table_amrsi,
-    clear_table_vppr
+    clear_table_vppr,
+    remover_symbol,
+    get_all_symbols,
 )
 from indicators.atr import calculate_moving_atr, smooth_atr
 from indicators.rsi import get_rsi
@@ -61,7 +63,6 @@ logger = logging.getLogger(__name__)
 
 create_table()
 create_table_trend_clarifications()
-clear_table_trend_clarifications()
 init_db()
 init_db_rsi()
 ini_db_vppr()
@@ -522,7 +523,6 @@ def filter_price_atr():
 
     limit = round_atr
     confirmar = confir_round
-    print("limit",limit)
 
     # Inicializa variáveis de controle
     cont = 0
@@ -1636,6 +1636,89 @@ def market_observation():
 def latest_market_observation():
      market_observation = get_latest_market_by_symbol()
      return jsonify(market_observation)
+
+@app.route("/api/remove_symbol_market_observation",methods=["POST"])
+def delete_symbol_market_observation():
+    data = request.get_json()
+
+    if not data or "symbol" not in data:
+       return jsonify({"error": "Symbol não enviado"}), 400
+
+    symbol = data["symbol"]
+    remover_symbol(symbol)
+
+    return jsonify({"message": f"{symbol} removido com sucesso"})
+
+
+@app.route("/api/update_market_observations", methods=["GET"])
+def update_market_observations():
+    """
+    Atualiza observações de mercado para TODOS os símbolos salvos.
+    Busca dados recentes da Binance e atualiza o banco em background.
+    """
+    try:
+        symbols = get_all_symbols()
+        
+        if not symbols:
+            return jsonify({
+                "message": "Nenhum símbolo salvo para atualizar",
+                "updated_symbols": []
+            }), 200
+        
+        time = get_timeframe_global()
+        updated_data = []
+        
+        for symbol in symbols:
+            try:
+                # Validação básica do símbolo
+                if not symbol or not isinstance(symbol, str):
+                    updated_data.append({
+                        "symbol": symbol,
+                        "status": "erro",
+                        "error": "Símbolo inválido"
+                    })
+                    continue
+                
+                symbol_clean = symbol.strip().upper()
+                
+                # Busca os dados mais recentes da Binance
+                raw_data = get_klines_observation(symbol=symbol_clean, interval=time, total=2000)
+                data = format_raw_data(raw_data)
+                
+                # Adiciona variação de preço
+                formatted_data = add_price_variation(data)
+                
+                # Salva as observações no banco
+                save_market_observations(symbol_clean, formatted_data)
+                
+                updated_data.append({
+                    "symbol": symbol_clean,
+                    "status": "atualizado",
+                    "total_candles": len(formatted_data)
+                })
+                
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"❌ Erro ao atualizar {symbol}: {error_msg}")
+                updated_data.append({
+                    "symbol": symbol,
+                    "status": "erro",
+                    "error": error_msg
+                })
+        
+        return jsonify({
+            "message": f"{sum(1 for x in updated_data if x['status'] == 'atualizado')} de {len(symbols)} símbolo(s) atualizado(s)",
+            "updated_symbols": updated_data
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Erro geral em update_market_observations: {str(e)}")
+        return jsonify({"error": f"Erro ao atualizar observações: {str(e)}"}), 500
+
+
+
+
 
 
 

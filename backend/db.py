@@ -659,4 +659,27 @@ def get_latest_market_by_symbol():
         result.append(last)
     return result
 
+def get_all_symbols():
+    """Retorna uma lista de todos os símbolos salvos"""
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute("SELECT DISTINCT symbol FROM market_observations")
+    result = cursor.fetchall()
+    conn.close()
+    return [row[0] for row in result]
+
+def remover_symbol(symbol):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute(
+    """
+      DELETE FROM market_observations 
+      WHERE symbol = ?
+    """,
+    (symbol,)
+    )
+
+    conn.commit()
+    conn.close()
 

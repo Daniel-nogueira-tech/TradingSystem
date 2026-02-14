@@ -223,6 +223,33 @@
   transition: color 0.3s ease;
 }
 
+.expand{
+  height: 60px;
+  align-items: center;
+  justify-content: center;
+}
+.pi-arrow-up-right-and-arrow-down-left-from-center{
+  font-size: small;
+  margin-left: 20px;
+  padding: 10px;
+  background-color: var(--navbar-color);
+  transition: ease 0.5s;
+  box-shadow: 0px 0px 4px 1px var(--black);
+  border: 1px solid var(--background-table);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.pi-arrow-up-right-and-arrow-down-left-from-center:hover{
+  transform: scale(1.2);
+  box-shadow: var(--box-shadow);
+}
+.p-dialog .p-dialog-header .p-dialog-title,
+.p-dialog .p-dialog-header-icons{
+  margin: 10px 30px 0px 30px;
+}
+
+
+
 
 
 /* Animation */
