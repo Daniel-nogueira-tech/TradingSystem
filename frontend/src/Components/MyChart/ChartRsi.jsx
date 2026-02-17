@@ -14,9 +14,7 @@ import { Line } from 'react-chartjs-2';
 import { AppContext } from '../../ContextApi/ContextApi';
 import { useContext } from 'react';
 import { useRef } from 'react';
-import { useEffect } from 'react';
-import { ProgressBar } from 'primereact/progressbar';
-import { useState } from 'react';
+
 
 
 // Registrar os componentes no Chart.js
@@ -42,7 +40,6 @@ ChartJS.register(
 const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
    const { rsi, rsiTime, simulationValueDataRsi, simulationLabelDataRsi, windowSize } = useContext(AppContext);
    const chartRef = useRef();
-   const [progress, setProgress] = useState(0);
 
 
    const handleZoomIn = () => {
@@ -278,27 +275,7 @@ const ChartRsi = ({ selectedDateStart, selectedDateEnd }) => {
    };
 
 
-   //Efeito para animar o progresso
-   useEffect(() => {
-       if (!isLoading) {
-           setProgress(100);
-           return;
-       }
 
-
-       setProgress(0);
-
-
-       const interval = setInterval(() => {
-           setProgress(prev => {
-               if (prev >= 99) return prev;
-               return prev + 5;
-           });
-       }, 200);
-
-
-       return () => clearInterval(interval);
-   }, [isLoading]);
 
 
 return (
@@ -313,26 +290,7 @@ return (
         }}
     >
         {isLoading ? (
-            <div
-                style={{
-                    width: "300px",
-                    height: "30px",
-                    margin: "0 auto",
-                    position: "absolute",
-                    top: "50%",
-                    left: "50%",
-                    transform: "translate(-50%, -50%)"
-                }}
-            >
-                <ProgressBar
-                    value={progress}
-                    style={{
-                        height: '30px',
-                        backgroundColor: '#e187ff3f',
-                        color: '#a54a4a'
-                    }}
-                />
-            </div>
+            <div style={{ width: '100%', height: '350px', margin: '10px auto' }} />
         ) : (
             <>
                 <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>

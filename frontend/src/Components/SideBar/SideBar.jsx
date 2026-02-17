@@ -1,6 +1,7 @@
 import React from 'react';
 import './SideBar.css';
-import { FaChartBar, FaHome, FaUserAlt, FaCog, FaChartLine } from 'react-icons/fa';
+import { FaSignal , FaHome, FaUserAlt, FaCog, FaChartLine} from 'react-icons/fa';
+import { BsRobot } from "react-icons/bs";
 import { NavLink } from 'react-router-dom';
 
 const SideBar = () => {
@@ -12,7 +13,7 @@ const SideBar = () => {
           <img src="./favicon.ico" alt="logo" className='logo' />
           <p>Next Atom</p>
         </div>
-        
+
         <NavLink to="/" className="side-button">
           <FaHome className="icon" />
           <span>Início</span>
@@ -20,8 +21,8 @@ const SideBar = () => {
 
 
         <NavLink to="/Graphics" className="side-button">
-          <FaChartBar className="icon" />
-          <span>Gráficos</span>
+          <BsRobot className="icon" />
+          <span>Algoritmo (IA)</span>
         </NavLink >
 
         <NavLink to="/Market" className="side-button">
@@ -30,7 +31,7 @@ const SideBar = () => {
         </NavLink >
 
         <NavLink to="/Correlation" className="side-button">
-          <FaChartLine className="icon" />
+          <FaSignal  className="icon" />
           <span>Correlação</span>
         </NavLink >
       </div>

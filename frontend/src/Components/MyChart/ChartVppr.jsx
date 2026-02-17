@@ -13,9 +13,6 @@ import {
 import { Chart } from "react-chartjs-2";
 import { AppContext } from "../../ContextApi/ContextApi";
 import { useRef } from "react";
-import { ProgressBar } from "primereact/progressbar";
-import { useState } from "react";
-import { useEffect } from "react";
 import { useMemo } from "react";
 
 ChartJS.register(
@@ -34,7 +31,6 @@ ChartJS.register(
 const ChartVppr = () => {
     const { vppr, vpprTime, vpprEma, simulationLabelDataVppr, simulationValueDataVppr, simulationValueDataVpprEma,windowSize } = useContext(AppContext);
     const chartRef = useRef();
-    const [progress, setProgress] = useState(0);
 
     /* Função para zoom*/
     const handleZoomIn = () => {
@@ -207,44 +203,12 @@ const ChartVppr = () => {
     };
 
 
-    //Efeito para animar o progresso
-    useEffect(() => {
-        if (!isLoading) {
-            setProgress(100);
-            return;
-        }
 
-        setProgress(0);
-
-        const interval = setInterval(() => {
-            setProgress(prev => {
-                if (prev >= 99) return prev;
-                return prev + 5;
-            });
-        }, 200);
-
-        return () => clearInterval(interval);
-    }, [isLoading]);
 
 
     return (
         isLoading ? (
-            <div
-                style={{
-                    width: "300px",
-                    height: "270px",
-                    margin: "20px auto",
-                    textAlign: "center"
-                }}
-            >
-                <ProgressBar value={progress}
-                    style={{
-                        height: '30px',
-                        top: "110px",
-                        color: '#a54a4a',
-                        backgroundColor: '#e187ff3f'
-                    }} />
-            </div>
+            <div style={{ width: '100%', height: '350px', margin: '10px auto' }} />
         ) : (
             <>
                 <div

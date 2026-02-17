@@ -683,3 +683,28 @@ def remover_symbol(symbol):
     conn.commit()
     conn.close()
 
+
+#PEGA OS DADOS PARA GRÁFICOS DE OBSERVAÇÂO DE MERCADO
+def get_complete_data_market_observations(symbol):
+    """Retorna todos os registros (candles) do símbolo como array desserializado"""
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        SELECT notes
+        FROM market_observations  
+        WHERE symbol = ?
+        """,
+        (symbol,)
+    )
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return []
+    
+    # Desserializa o JSON armazenado
+    notes_data = json.loads(row[0])
+    return notes_data 

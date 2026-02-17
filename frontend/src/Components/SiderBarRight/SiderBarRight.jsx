@@ -12,9 +12,9 @@ const SiderBarRight = () => {
     const toggleSwitch = () => setIsOn(!isOn);
     useEffect(() => {
         if (isOn) {
-            setActiveAlgorithm('Ativado')
+            setActiveAlgorithm('ON')
         } else {
-            setActiveAlgorithm('Desativado')
+            setActiveAlgorithm('OFF')
         }
     }, [isOn]);
 

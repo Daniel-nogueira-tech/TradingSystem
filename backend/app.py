@@ -41,6 +41,7 @@ from db import (
     clear_table_vppr,
     remover_symbol,
     get_all_symbols,
+    get_complete_data_market_observations
 )
 from indicators.atr import calculate_moving_atr, smooth_atr
 from indicators.rsi import get_rsi
@@ -507,7 +508,7 @@ def filter_price_atr():
         return jsonify({"erro": "ATR não pôde ser calculado."}), 400
 
     if time == "1d":
-        verify_time_multiply = 4
+        verify_time_multiply = 3
     else:
         verify_time_multiply = 5
 
@@ -1716,8 +1717,21 @@ def update_market_observations():
         print(f"❌ Erro geral em update_market_observations: {str(e)}")
         return jsonify({"error": f"Erro ao atualizar observações: {str(e)}"}), 500
 
+@app.route("/api/get_market_observation", methods=["POST"])
+def get_market_observation():
+    data = request.get_json()
+
+    if not data or "symbol" not in data:
+        return jsonify({"error": "Symbol não enviado"}), 400
+
+    symbol = data["symbol"]
+
+    result = get_complete_data_market_observations(symbol)
 
 
+    return jsonify({"data": result})
+
+ 
 
 
 

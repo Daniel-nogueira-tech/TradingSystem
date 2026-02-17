@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import './Home.css';
+import './Home.css';           // ← o css atualizado acima
 import MyChart from '../../Components/MyChart/MyChart';
 import Swal from 'sweetalert2';
 
-const Home = () => {
-    const [selectedDateStart, setSelectedDateStart] = useState('data');
-    const [selectedDateEnd, setSelectedDateEnd] = useState('data');
 
-    const onChangeHandlerDate = async () => {
+const Home = () => {
+    const [selectedDateStart, setSelectedDateStart] = useState('');
+    const [selectedDateEnd, setSelectedDateEnd] = useState('');
+
+    const pickStartDate = async () => {
         const { value: date } = await Swal.fire({
             title: "Selecione a data",
             input: "date",
@@ -53,7 +54,7 @@ const Home = () => {
         }
     };
 
-    const onChangeHandlerDateEnd = async () => {
+    const pickEndDate = async () => {
         const { value: date } = await Swal.fire({
             title: "Selecione a data",
             input: "date",
@@ -99,96 +100,79 @@ const Home = () => {
         }
     };
 
+    const handleSearch = () => {
+        // Aqui você pode chamar a busca / atualizar o gráfico
+        console.log("Buscando:", selectedDateStart, "→", selectedDateEnd);
+    };
+
     return (
-        <div className='container-home-main '>
-            <div className='container-home '>
-                <div className='button-date-container'>
-                    <div className='button-dt'>
-                        <button className='button-date' 
-                        onClick={onChangeHandlerDate}>Data inicio</button>
-                        {selectedDateStart && <p className='date'>De: <strong>{selectedDateStart}</strong></p>}
-                    </div>
-
-                    <div className='button-dt'>
-                        <button className='button-date' onClick={onChangeHandlerDateEnd}>Data final</button>
-                        {selectedDateStart && <p className='date'>Até a : <strong>{selectedDateEnd}</strong></p>}
-                    </div>
-                    <button className='button-search' id='button-search'>
-                        <img src="./search.svg" alt="" />
+        <div className="dashboard-wrapper">
+            {/* Barra de filtros */}
+            <div className="filters-bar">
+                <div className="filter-group">
+                    <button onClick={pickStartDate}>
+                        {/* <Calendar size={18} />  ← opcional com lucide */}
+                        Data Inicial
                     </button>
+                    {selectedDateStart && (
+                        <span className="date-display">De: <strong>{selectedDateStart}</strong></span>
+                    )}
                 </div>
 
-
-                <div className='content-wrapper'>
-                    <div className='container-home'>
-                        <div className='container-results'>
-                            <h3>Saldo atual</h3>
-                            <p>R$ 25.354,00</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Lucro</h3>
-                            <p>R$ 27.454,00</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Perdas</h3>
-                            <p>R$ -2.654,00</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Retorno</h3>
-                            <p>80%</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Vendido</h3>
-                            <p>80</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Comprado</h3>
-                            <p>10</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Total de operações</h3>
-                            <p>125</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Taxa de acerto</h3>
-                            <p>62%</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Maior lucro / maior perda</h3>
-                            <p>Lucro: R$ 3.200,00</p>
-                            <p>Perda: R$ -2.654,00</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Risco/Retorno</h3>
-                            <p>1:2</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Tempo médio de operação</h3>
-                            <p>2h 45min</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Drawdown</h3>
-                            <p>-12%</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Média de ganhos</h3>
-                            <p>R$ 2.542,00</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Média de perdas</h3>
-                            <p>R$ -542,00</p>
-                        </div>
-                        <div className='container-results'>
-                            <h3>Historico completo</h3>
-                            <p></p>
-                        </div>
-                    </div>
-
-                    <div className='analysis-chart'>
-                        <MyChart selectedDateStart={selectedDateStart} selectedDateEnd={selectedDateEnd} />
-                    </div>
+                <div className="filter-group">
+                    <button onClick={pickEndDate}>Data Final</button>
+                    {selectedDateEnd && (
+                        <span className="date-display">Até: <strong>{selectedDateEnd}</strong></span>
+                    )}
                 </div>
+
+                <button className="btn-search" onClick={handleSearch}>
+                    <span className='pi pi-search'></span>
+                </button>
             </div>
+
+            {/* KPIs em grid */}
+            <div className="kpi-grid">
+                <div className="kpi-card">
+                    <h3>Saldo Atual</h3>
+                    <p className="kpi-neutral">R$ 25.354,00</p>
+                </div>
+                <div className="kpi-card">
+                    <h3>Lucro</h3>
+                    <p className="kpi-positive">R$ 27.454,00</p>
+                </div>
+                <div className="kpi-card">
+                    <h3>Perdas</h3>
+                    <p className="kpi-negative">R$ -2.654,00</p>
+                </div>
+                <div className="kpi-card">
+                    <h3>Retorno</h3>
+                    <p className="kpi-positive">80%</p>
+                </div>
+                <div className="kpi-card">
+                    <h3>Taxa de Acerto</h3>
+                    <p className="kpi-positive">62%</p>
+                </div>
+                <div className="kpi-card">
+                    <h3>Drawdown</h3>
+                    <p className="kpi-negative">-12%</p>
+                </div>
+            
+                <div className="kpi-card">
+                    <h3>Histórico</h3>
+                    <p className="kpi-grid pi pi-history"></p>
+                </div>
+
+                {/* Adicione mais conforme necessário – priorize os 5–7 mais importantes aqui */}
+            </div>
+
+            {/* Gráfico principal – ocupa mais espaço */}
+            <div className="chart-section">
+                <h2>Análise de Performance</h2>
+                <MyChart selectedDateStart={selectedDateStart} selectedDateEnd={selectedDateEnd} />
+            </div>
+
+            {/* Você pode adicionar mais seções abaixo: tabela de operações, histórico etc */}
         </div>
     );
 };

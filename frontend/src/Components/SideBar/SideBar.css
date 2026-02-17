@@ -32,6 +32,7 @@
   margin-bottom: 10px;
   text-decoration: none;
   top: -100;
+  transition: 0.3s ease-in;
 }
 
 .side-button:hover,

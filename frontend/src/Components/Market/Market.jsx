@@ -7,10 +7,11 @@ import { Dialog } from 'primereact/dialog';
 
 import { Messages } from 'primereact/messages';
 import ChartMarketObservation from '../MyChart/ChartMarketObservation';
+import { Colors } from 'chart.js';
 
 
 const Market = () => {
-  const { marketObservation, addSymbol, setAddSymbol, saveMarketNotes, handleRemoveSymbol, data, setData } = React.useContext(AppContext);
+  const { getMarketObservationComplete, marketObservation, addSymbol, setAddSymbol, saveMarketNotes, handleRemoveSymbol, data, setData } = React.useContext(AppContext);
 
   const [filterSymbol, setFilterSymbol] = React.useState('');
   const [showFilter, setShowFilter] = React.useState(false);
@@ -24,6 +25,7 @@ const Market = () => {
 
   const openChart = (symbol) => {
     setSelectedSymbol(symbol);
+    getMarketObservationComplete(symbol)
     setShowChart(true);
   };
 
@@ -169,7 +171,7 @@ const Market = () => {
                     {item.variacao}
                   </td>
 
-                  <td>{item.Fechamento}</td>
+                  <td >{item.Fechamento}</td>
                   <td>{item.Maximo}</td>
                   <td>{item.Minimo}</td>
                   <td>{item.Volume}</td>
@@ -190,11 +192,14 @@ const Market = () => {
           </tbody>
         </table>
         <Dialog
-        style={ {padding:'20px',justifyContent: 'center'}}
-          header={`Gráfico - ${selectedSymbol}`}
+          style={{   Color: 'ffffffff',padding: '20px', justifyContent: 'center' }}
+          header={` ${selectedSymbol}`}
           visible={showChart}
           onHide={() => setShowChart(false)}
           maximizable
+          modal={false}  // ← Importante: sem bloquear tela
+          draggable={true}                 
+          resizable={true}
         >
           {selectedSymbol && (
             <ChartMarketObservation symbol={selectedSymbol} />

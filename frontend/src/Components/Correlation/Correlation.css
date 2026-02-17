@@ -2,7 +2,8 @@
   padding: 20px;
   background: var(--background);
   min-height: 96vh;
-  width: 84vw;
+  width: 83vw;
+  margin: 0 2%;
   border-radius: 10px;
   animation: fadeIns 1s ease;
 }

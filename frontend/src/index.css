@@ -8,6 +8,8 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
+  display: flex;
+
 
 }
 
@@ -15,27 +17,28 @@
 :root {
   background-color: #242424;
   --color-font: rgba(255, 255, 255, 0.87);
-  --navbar-color-active: radial-gradient(#9475a2, #2b2b2b);
-  --navbar-color: radial-gradient(#4a3c51, #202020);
-  --background: radial-gradient(#2a202e, #1a1a1a);
+  --navbar-color-active: radial-gradient(#a6a6a6, #2b2b2b);
+  --navbar-color: radial-gradient(#565656, #202020);
+  --background: radial-gradient(#2b2b2b, #141414);
   --background-basis: background-color: #242424;
   --background-side: #1c1c20;
   --box-shadow: 2px 0 10px rgba(0, 0, 0, 0.8);
   --box-shadow-active: 0px 0px 5px 5px rgba(156, 156, 156, 0.2);
-  --background-color-button: rgb(48, 48, 48);
+  --background-color-button: rgb(74, 74, 74);
   --background-color-button-active: rgb(105, 105, 105);
   --background-table: rgb(72, 72, 72);
-  --background-card: rgb(32, 32, 32);
+  --background-card: rgb(41, 41, 41);
   --background-card-2: rgb(108, 108, 108);
   --white: rgb(248, 248, 248);
-  --black: black;
+  --black: rgba(0, 0, 0, 0.96);
   --side-font: rgb(255, 255, 255);
   --button-negative: rgba(255, 52, 52, 0.9);
   --button-negative-active: rgba(221, 36, 36, 0.9);
-  --button-positive: rgb(0, 255, 136);
+  --button-positive: rgba(33, 180, 0, 0.733);
   --button-positive-active: rgb(7, 186, 102);
   --button-gray: #b5b5b5;
-  --font-global:'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+  --font-global: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+  --btn-search: linear-gradient(135deg, #a9a9a9, #474747);
 
 }
 
@@ -52,17 +55,57 @@ body.clear-theme {
   --background-table: #7e7e7e;
   --background-card: #8d8d8d;
   --background-card-2: #eeeeee;
-  --white: #2a2a2a;
+  --white: #ffffff;
   /* invertendo se necessário */
-  --black: #ffffff;
+  --black: rgba(0, 0, 0, 0);
   --button-negative: rgba(255, 90, 90, 0.9);
   --button-negative-active: rgba(221, 60, 60, 0.9);
   --button-positive: rgb(0, 166, 55);
   --button-positive-active: rgb(60, 170, 100);
   --button-gray: #ccc;
+  --btn-search: linear-gradient(135deg, #6b4e91, #9475a2);
 }
 
+body.very-dark-theme {
+  /* Fundo principal quase black para máximo contraste e economia de bateria */
+  --background: radial-gradient(circle at 20% 30%, #0f0815, #050505);
+  --background-basis: #0a0a0a;
+  --background-side: #050505;
 
+  /* Fontes e textos com mais brilho para legibilidade */
+  --color-font: rgba(255, 255, 255, 0.92);
+  --side-font: rgb(245, 245, 255);
+  --white: rgb(255, 255, 255);
+  --black: #000000;
+
+  /* Navbar / elementos ativos com roxo mais "cyber" e profundo */
+  --navbar-color: radial-gradient(#3a1f4a, #0f0f15);
+  --navbar-color-active: radial-gradient(#a050d8, #1a0d22);
+
+  /* Sombras mais dramáticas e focadas */
+  --box-shadow: 0 4px 25px rgba(0, 0, 0, 0.85);
+  --box-shadow-active: 0 0 18px 6px rgba(160, 80, 216, 0.28);
+
+  /* Botões - mais contraste */
+  --background-color-button: #181818;
+  --background-color-button-active: #2e2e2e;
+
+  /* Cards e tabelas mais imersivas */
+  --background-card: #111111;
+  --background-card-2: #1a1a1a;
+  --background-table: #3f3f3f;
+
+  /* Cores de feedback financeiro mantidas, mas com mais punch */
+  --button-negative: rgba(255, 70, 70, 0.92);
+  --button-negative-active: rgba(220, 40, 40, 0.95);
+  --button-positive: rgba(0, 255, 140, 0.723);
+  --button-positive-active: rgba(0, 210, 109, 0.794);
+  --button-gray: #999999;
+  --btn-search: linear-gradient(135deg, #6b4e91, #9475a2);
+
+  /* Mantém a fonte global */
+  --font-global: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+}
 
 
 /*=====================

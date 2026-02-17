@@ -57,7 +57,7 @@
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.3s;
-  color: var(--black);
+  color: var(--white);
 }
 
 .save-button:hover {

@@ -7,33 +7,14 @@ import { useEffect } from 'react';
 
 
 const Config = () => {
-  const { handleSave, handleRemove,theme,setTheme } = useContext(AppContext);
+  const { handleSave, handleRemove, theme, setTheme } = useContext(AppContext);
   const [notifications, setNotifications] = useState(true);
   const [language, setLanguage] = useState('pt-BR');
   const [currency, setCurrency] = useState('BRL');
 
-    // pega o tema do localStorage e exibe para o usuario
-  useEffect(() => {
-    const savedTheme = localStorage.getItem('theme') || 'dark';
-    if (savedTheme) {
-      setTheme(savedTheme);
-    }
-  }, []);
 
 
-  // funcao para mudar tema e salvar no localStorage
-  useEffect(() => {
-    if (theme === 'clear-theme') {
-      document.body.classList.add('clear-theme');
-      document.body.classList.remove('dark');
-    } else {
-      document.body.classList.remove('clear-theme');
-      document.body.classList.add('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-    const keyApi = {
+  const keyApi = {
     'key': '6fgh65hf654h4dfgg5656gh5655gf5fdg54f5gj5gkj5jkl665sdfr6ds26g26'
   }
 
@@ -49,6 +30,7 @@ const Config = () => {
           <select value={theme} onChange={(e) => setTheme(e.target.value)}>
             <option value="dark">Dark</option>
             <option value="clear-theme">Soft dark</option>
+            <option value="very-dark-theme">very-dark-theme</option>
           </select>
         </div>
 

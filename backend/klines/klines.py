@@ -30,7 +30,6 @@ def get_klines_extended(symbol, interval, total=2000):
 
         # anda para trás no tempo
         end_time = klines[0][0] - 1
-
         # segurança contra loop infinito
         if len(klines) == 0:
             break

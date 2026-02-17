@@ -2,6 +2,7 @@ import React, { createContext, useEffect, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import { Toast } from 'primereact/toast';
+import { ProgressSpinner } from 'primereact/progressspinner';
 
 import 'primereact/resources/themes/lara-dark-indigo/theme.css';
 
@@ -38,6 +39,22 @@ const ContextApi = (props) => {
   const [addSymbol, setAddSymbol] = React.useState('');// nova variável de estado para armazenar o símbolo a ser adicionado
   const [removeSymbol, setRemoveSymbol] = React.useState('') // remover simbolos
   const [data, setData] = React.useState([]);
+  const [loadingSimulation, setLoadingSimulation] = useState(false);
+  const [downloadedData, setDownloadedData] = useState(false);
+
+  // Global loading (reference-counted) — use para mostrar um único loading enquanto múltiplos fetches ocorrem
+  const [globalLoadingCount, setGlobalLoadingCount] = useState(0);
+  const isGlobalLoading = globalLoadingCount > 0;
+  const startGlobalLoading = () => setGlobalLoadingCount(c => c + 1);
+  const stopGlobalLoading = () => setGlobalLoadingCount(c => Math.max(0, c - 1));
+  const runWithGlobalLoading = async (fn) => {
+    startGlobalLoading();
+    try {
+      return await fn();
+    } finally {
+      stopGlobalLoading();
+    }
+  };
 
   const [dateSimulationStart, setDateSimulationStart] = useState("")
   const [dateSimulationEnd, setDateSimulationEnd] = useState("")
@@ -407,6 +424,9 @@ const ContextApi = (props) => {
     1️⃣ Função para Selecionae datas para simulação do ativo Primária
    -------------------------------------------------------------------*/
   const dateSimulation = async () => {
+    if (loadingSimulation) return;
+    setLoadingSimulation(true);
+    setDownloadedData(false);
     try {
       const response = await axios.post(
         `${url}/api/update_klines`,
@@ -436,6 +456,7 @@ const ContextApi = (props) => {
         life: 5000
       });
 
+      setDownloadedData(true);
     } catch (error) {
       // ❌ Toast de erro
       toast.current.show({
@@ -445,6 +466,8 @@ const ContextApi = (props) => {
         life: 5000
       });
       console.error("Erro na API de atualização de datas:", error.response?.data || error.message);
+    } finally {
+      setLoadingSimulation(false);
     }
   }
 
@@ -464,6 +487,7 @@ const ContextApi = (props) => {
   const graphicDataOne = async (symbol) => {
     // 🧹 Limpa dados da simulação
     clearTimeout(simulationTimeoutRef.current);
+    startGlobalLoading();
     try {
       const response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbol}`);
       const data = response.data;
@@ -492,6 +516,8 @@ const ContextApi = (props) => {
 
     } catch (error) {
       console.error("❌ Erro ao buscar dados:", error);
+    } finally {
+      stopGlobalLoading();
     }
   };
 
@@ -591,7 +617,6 @@ const ContextApi = (props) => {
         getRsi(symbol);
         getVppr(symbol);
 
-
         Swal.fire({
           title: "Alterado!",
           text: "O time frame foi atualizado com sucesso!",
@@ -603,7 +628,13 @@ const ContextApi = (props) => {
             confirmButton: 'botao-verde',
           }
         });
-
+         
+        /** Atualiza obeservação de mercado após trocar time frame*/
+         const res = await axios.get(`${url}/api/update_market_observations`);
+        if (res.data?.updated_symbols) {
+          const successful = res.data.updated_symbols.filter(u => u.status === 'atualizado').length;
+          console.log(`✅ ${successful} observações de mercado atualizadas após adicionar novo símbolo`);
+        }
       } catch (error) {
         Swal.fire({
           title: "Erro!",
@@ -662,7 +693,7 @@ const ContextApi = (props) => {
  Função para pegar dados do calculo rsi
 --------------------------------------------*/
   const getRsi = async (symbol) => {
-
+    startGlobalLoading();
     try {
       const response = await axios.get(
         `${url}/api/rsi?period=${period}&symbol=${symbol}&modo=${modo}`
@@ -679,6 +710,8 @@ const ContextApi = (props) => {
       setRsiTime([...time])
     } catch (error) {
       console.error("Erro ao buscar dados do RSI", error);
+    } finally {
+      stopGlobalLoading();
     }
   };
 
@@ -689,7 +722,7 @@ const ContextApi = (props) => {
   const getVppr = async (symbol) => {
     if (controller) controller.abort();
     controller = new AbortController();
-
+    startGlobalLoading();
     try {
       const { data } = await axios.get(
         `${url}/api/vppr`,
@@ -716,12 +749,15 @@ const ContextApi = (props) => {
 
     } catch (error) {
       console.error("Erro ao buscar dados do VPPR", error);
+    } finally {
+      stopGlobalLoading();
     }
   }
   /**------------------------------------------------------------
    * Função para salvar observações de mercado no banco de dados
    --------------------------------------------------------------*/
   const [marketObservation, setMarketObservation] = useState([]);
+  const [marketObservationComplete, setMarketObservationComplete] = useState([]);
   const saveMarketNotes = async () => {
     if (!addSymbol || !addSymbol.trim()) {
       console.warn("⏭️ Requisição ignorada: símbolo vazio");
@@ -731,7 +767,7 @@ const ContextApi = (props) => {
     try {
       const { data } = await axios.post(`${url}/api/market_observation`, {
         symbol: addSymbol.trim().toUpperCase(),
-        total: 2000
+        total: 2000,
       });
 
       toast.current.show({
@@ -743,7 +779,7 @@ const ContextApi = (props) => {
 
       setAddSymbol('');
       getMarketObservation(); // Atualiza a lista de observações após adicionar
-      
+
       // 🔄 Atualiza imediatamente todos os símbolos salvos
       try {
         const response = await axios.get(`${url}/api/update_market_observations`);
@@ -801,6 +837,17 @@ const ContextApi = (props) => {
     }
   }
 
+  const getMarketObservationComplete = async (symbol) => {
+    try {
+      const response = await axios.post(`${url}/api/get_market_observation`, {
+        symbol: symbol
+      });
+      const data = response.data.data;
+      setMarketObservationComplete(data);
+    } catch (error) {
+      console.error("Erro ao buscar observações de mercado:", error);
+    }
+  };
 
   const handleSave = () => {
     Swal.fire({
@@ -867,6 +914,35 @@ const ContextApi = (props) => {
       }
     })
   };
+
+  /**---------------------------------------------
+   * Mudar tema e salvar no localStorage
+   -----------------------------------------------*/
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'dark' || 'very-dark-theme';
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+  useEffect(() => {
+    if (theme === 'clear-theme') {
+      document.body.classList.remove('dark');
+      document.body.classList.remove('very-dark-theme');
+      document.body.classList.add('clear-theme');
+
+    } else if (theme === 'dark') {
+      document.body.classList.remove('clear-theme');
+      document.body.classList.remove('very-dark-theme');
+      document.body.classList.add('dark');
+
+    } else if (theme === 'very-dark-theme') {
+      document.body.classList.remove('clear-theme');
+      document.body.classList.remove('dark');
+      document.body.classList.add('very-dark-theme');
+    }
+
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
 
 
@@ -1963,7 +2039,8 @@ const ContextApi = (props) => {
             handleGetPoints(),
             getDateSimulation(),
             saveMarketNotes(),
-            getMarketObservation()
+            getMarketObservation(),
+            getMarketObservationComplete()
           ], [savedSymbol]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
@@ -2024,7 +2101,7 @@ const ContextApi = (props) => {
             }
           })
           .catch(err => console.warn("⚠️ Erro ao atualizar observações:", err.message));
-        
+
         await Promise.all([
           graphicDataOne(symbol),
           handleGetPoints(),
@@ -2091,13 +2168,24 @@ const ContextApi = (props) => {
     windowSize,
     setWindowSize,
     marketObservation,
+    marketObservationComplete,
+    getMarketObservationComplete,
     addSymbol,
     setAddSymbol,
     saveMarketNotes,
     setRemoveSymbol,
     data,
     setData,
-    handleRemoveSymbol
+    handleRemoveSymbol,
+    // global loader
+    isGlobalLoading,
+    startGlobalLoading,
+    stopGlobalLoading,
+    runWithGlobalLoading,
+    loadingSimulation,
+    downloadedData,
+    marketObservationComplete,
+    getMarketObservationComplete,
   };
 
   return (
@@ -2106,6 +2194,17 @@ const ContextApi = (props) => {
       <Toast ref={toast} position="bottom-right"
         className="custom-toast"
       />
+
+      {/* Global loading overlay (single loader for all data fetches) */}
+      {isGlobalLoading && (
+        <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', zIndex: 9999 }}>
+          <div style={{ textAlign: 'center', color: '#fff' }}>
+            <ProgressSpinner style={{ width: 64, height: 64 }} strokeWidth="6" />
+            <div style={{ marginTop: 12 }}>Loading...</div>
+          </div>
+        </div>
+      )}
+
       <AppContext.Provider value={contextValue}>
         {props.children}
       </AppContext.Provider>

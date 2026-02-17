@@ -43,7 +43,6 @@ label {
 
 .buy-btn {
     background-color: var(--button-positive);
-    color: var(--black);
 }
 
 .sell-btn {
