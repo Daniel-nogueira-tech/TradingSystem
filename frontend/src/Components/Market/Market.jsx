@@ -4,10 +4,9 @@ import { AppContext } from '../../ContextApi/ContextApi';
 import 'primeicons/primeicons.css';
 import { Dialog } from 'primereact/dialog';
 
-
 import { Messages } from 'primereact/messages';
 import ChartMarketObservation from '../MyChart/ChartMarketObservation';
-import { Colors } from 'chart.js';
+
 
 
 const Market = () => {
@@ -47,8 +46,7 @@ const Market = () => {
     return (
       <div className="market-main">
         <div className="market">
-          <h2>Mercado de Criptomoedas</h2>
-          <p>Carregando dados do mercado...</p>
+          <p>Loading...</p>
         </div>
       </div>
     );
@@ -62,7 +60,7 @@ const Market = () => {
         <div style={{ position: 'relative' }}>
           <h2>
             Mercado de Criptomoedas
-            <div className="search-container">
+            <div className="search-container-market">
               <button
                 className="filter-btn"
                 onClick={() => setShowFilter(!showFilter)}
@@ -192,7 +190,7 @@ const Market = () => {
           </tbody>
         </table>
         <Dialog
-          style={{   Color: 'ffffffff',padding: '20px', justifyContent: 'center' }}
+          style={{ width: '1200px', justifyContent: 'center' }}
           header={` ${selectedSymbol}`}
           visible={showChart}
           onHide={() => setShowChart(false)}

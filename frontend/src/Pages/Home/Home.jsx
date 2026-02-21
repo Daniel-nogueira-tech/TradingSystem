@@ -135,15 +135,15 @@ const Home = () => {
             <div className="kpi-grid">
                 <div className="kpi-card">
                     <h3>Saldo Atual</h3>
-                    <p className="kpi-neutral">R$ 25.354,00</p>
+                    <p className="kpi-neutral">$ 25.354,00</p>
                 </div>
                 <div className="kpi-card">
                     <h3>Lucro</h3>
-                    <p className="kpi-positive">R$ 27.454,00</p>
+                    <p className="kpi-positive">$ 27.454,00</p>
                 </div>
                 <div className="kpi-card">
                     <h3>Perdas</h3>
-                    <p className="kpi-negative">R$ -2.654,00</p>
+                    <p className="kpi-negative">$ -2.654,00</p>
                 </div>
                 <div className="kpi-card">
                     <h3>Retorno</h3>

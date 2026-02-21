@@ -182,9 +182,484 @@
     background: transparent;
 }
 
-@media (max-width: 1900px) {
-    .MyChart-analysis {
+/*==============================================================
+                  TERMôMETRO
+===================================================================*/
+.gauge-container {
+    display: flex;
+    height: 350px;
+    flex-direction: column;
+    align-items: center;
+    font-family: Arial, sans-serif;
+    margin: 40px;
+    margin-left: 0;
+    background-color: var(--background);
+    padding: 40px;
+    border-radius: 10px;
+    border: 1px solid var(--background-table);
+}
+
+.gauge-container-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 80px;
+    margin-left: 100px;
+    margin-right: 100px;
+}
+
+.list-cript {
+    display: flex;
+    justify-content: center;
+    flex-direction: column;
+    margin-left: 0;
+    margin-top: 30px;
+    margin-bottom: 30px;
+    padding: 30px;
+    border: 1px solid var(--background-table);
+    border-radius: 10px;
+    max-height: 380px;
+    overflow-y: auto;
+}
+
+.list-cript .symbol {
+    margin-bottom: 10px;
+    border: 1px solid #000;
+    padding: 8px;
+}
+
+.list-cript span {
+    margin-top: 10px;
+    border: 1px solid var(--background-table);
+    border-radius: 10px;
+    padding: 2px;
+    background-color: #0f9a0f;
+}
+
+.thermometer-slider {
+    display: flex;
+    justify-items: center;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 25px;
+    border-radius: 8px;
+    background: linear-gradient(to right,
+            rgba(255, 0, 0, 0.935) 0%,
+            var(--button-negative) -40%,
+            rgba(202, 202, 202, 0.935) 50%,
+            var(--button-positive) 100%);
+    outline: none;
+    cursor: pointer;
+    border: 2px solid var(--background-table);
+
+}
+.range-thermometer{
+    width: 380px;
+}
+.range-thermometer input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--background-card);
+    border: 3px solid #464646;
+    box-shadow: 0 0 8px rgba(17, 17, 17, 0.5);
+    transition: transform 0.15s ease;
+}
+
+
+.range-thermometer input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+}
+
+#PressureGauge {
+    width: 100%;
+}
+
+.gauge {
+    position: relative;
+    width: 380px;
+    height: 200px;
+    /* border: 1px solid #444; */
+}
+
+.gauge-arc {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 140px 140px 0 0;
+    overflow: hidden;
+    background: #222;
+}
+
+.zone {
+    position: absolute;
+    width: 33.33%;
+    height: 100%;
+    top: 0;
+}
+
+.zone.negative {
+    left: 0;
+    background: linear-gradient(60deg, #ff0000, #ffd7d7);
+}
+
+.zone.neutral {
+    left: 33.33%;
+    background: #444;
+}
+
+.zone.positive {
+    right: 0;
+    background: linear-gradient(-60deg, #00ff00, #bcffbc);
+}
+
+.needle {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 6px;
+    height: 110px;
+    transform-origin: bottom center;
+    transition: transform 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+    z-index: 10;
+}
+
+.needle-body {
+    width: 100%;
+    height: 80%;
+    background: linear-gradient(to top, #111, #eee, #111);
+    border-radius: 4px;
+    box-shadow: 0 0 12px rgba(0, 0, 0, 0.8);
+}
+
+.needle-tip {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-bottom: 18px solid #ff0044;
+    filter: drop-shadow(0 0 6px #ff0044aa);
+}
+
+.gauge-center {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 38px;
+    height: 38px;
+    background: #111;
+    border: 6px solid #444;
+    border-radius: 50%;
+    box-shadow:
+        inset 0 0 10px #000,
+        0 0 15px rgba(255, 255, 255, 0.15);
+    z-index: 20;
+}
+
+.value-display {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 2.6rem;
+    font-weight: bold;
+    color: #eee;
+    text-shadow: 0 0 10px #000;
+    z-index: 5;
+}
+
+.value-display.negative {
+    color: #ff4040;
+}
+
+.value-display.positive {
+    color: #4ade80;
+}
+
+.value-display.neutral {
+    color: #ccc;
+}
+
+.value-display small {
+    font-size: 1rem;
+    opacity: 0.7;
+    margin-left: 4px;
+}
+
+.controls {
+    display: flex;
+    margin-top: 40px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.controls button {
+    padding: 8px 16px;
+}
+
+/* Estilos do PickList */
+.picklist-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--background-table);
+}
+
+.picklist-item div {
+    font-weight: 300;
+    color: var(--white);
+}
+
+.picklist-item span {
+    font-weight: bold;
+    font-size: 0.9rem;
+    background-color: var(--background-table);
+}
+
+.picklist-item span.positive {
+    color: #00ff6a;
+}
+
+.picklist-item span.negative {
+    color: #ff1900;
+}
+
+/* Customização dos headers do PickList */
+:deep(.p-picklist-source-header),
+:deep(.p-picklist-target-header) {
+    background: var(--background-table) !important;
+    color: var(--white) !important;
+    font-weight: bold !important;
+    padding: 12px !important;
+}
+
+/* Customização das listas */
+:deep(.p-picklist-list) {
+    background: var(--background) !important;
+    border: 1px solid var(--background-table) !important;
+}
+
+:deep(.p-picklist-item) {
+    padding: 8px !important;
+    border-bottom: 1px solid var(--background-table) !important;
+}
+
+:deep(.p-picklist-item:hover) {
+    background-color: rgba(126, 80, 170, 0.2) !important;
+}
+
+.p-picklist-buttons {
+    margin: 5px;
+    gap: 5px;
+}
+
+.p-picklist .p-picklist-list {
+    background-color: var(--background);
+}
+
+.p-button {
+    background-color: var(--background-table);
+}
+
+
+.p-orderlist .p-orderlist-list,
+.p-orderlist-list {
+    background-color: var(--background);
+    border: 1px solid var(--background-table);
+    padding: 2px;
+}
+
+.p-orderlist .p-orderlist-item,
+.p-orderlist-item {
+    padding: 8px 10px !important;
+    border-bottom: 1px solid var(--background-table) !important;
+
+}
+
+.p-orderlist .p-orderlist-item:hover,
+.p-orderlist-item:hover {
+    background: rgba(126, 80, 170, 0.06) !important;
+}
+
+.p-orderlist .p-orderlist-controls {
+    margin-right: 20px;
+    gap: 10px;
+}
+
+.p-orderlist .p-orderlist-filter-container .p-orderlist-filter-input {
+    padding: 8px;
+    margin: 8px;
+    width: 95%;
+}
+
+.list-cript span {
+    display: flex;
+    padding: 5px;
+    background-color: transparent;
+    border: none;
+}
+
+.p-orderlist-filter-icon {
+    top: 10%;
+}
+
+
+
+
+
+
+
+
+
+
+
+/* Media Query para telas médias (1400px e menores) */
+@media (max-width: 1400px) {
+    .gauge-container-main {
+        display: flex;
+        gap: 30px;
+    }
+
+    .gauge {
+        width: 320px;
+        height: 170px;
+    }
+    .range-thermometer{
+    width: 320px;
+}
+}
+
+/* Media Query para tablets (1024px e menores) */
+@media (max-width: 1024px) {
+    .gauge-container-main {
+        gap: 50px;
+        justify-content: center;
+    }
+
+    .gauge {
+        width: 300px;
+        height: 160px;
+    }
+
+    .list-cript {
+        max-width: 380px;
+        max-height: 350px;
+    }
+
+    .value-display {
+        font-size: 2rem;
+    }
+
+    .controls {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .thermometer-slider {
+        margin: 0 auto;
+        width: 290px;
+
+    }
+
+    .p-picklist-list-wrapper {
+        justify-content: center;
+        justify-items: center;
         width: 100%;
     }
 
+    .p-picklist .p-picklist-header {
+        width: 180px
+    }
+}
+
+/* Media Query para tablets pequenos (768px e menores) */
+@media (max-width: 768px) {
+
+    .gauge {
+        width: 260px;
+        height: 140px;
+    }
+
+    .gauge-container {
+        max-width: 100%;
+        margin: 0;
+    }
+
+    .list-cript {
+        max-height: 300px;
+        padding: 15px;
+        max-width: 100%;
+    }
+
+    .value-display {
+        font-size: 1.8rem;
+    }
+
+    .controls button {
+        padding: 6px 12px;
+        font-size: 0.9rem;
+    }
+
+    .thermometer-slider {
+        width: 250px;
+        height: 10px;
+    }
+}
+
+/* Media Query para mobile (480px e menores) */
+@media (max-width: 480px) {
+    .gauge {
+        width: 220px;
+        height: 120px;
+    }
+
+    .needle {
+        height: 90px;
+    }
+
+    .gauge-center {
+        width: 30px;
+        height: 30px;
+        bottom: -8px;
+    }
+
+    .value-display {
+        font-size: 1.5rem;
+        bottom: 18px;
+    }
+
+    .value-display small {
+        font-size: 0.8rem;
+    }
+
+    .controls {
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .controls button {
+        padding: 5px 10px;
+        font-size: 0.85rem;
+    }
+
+    .thermometer-slider {
+        width: 220px;
+        height: 10px;
+    }
+
+    .list-cript {
+        max-height: 250px;
+        padding: 12px;
+        max-width: 100%;
+    }
 }

@@ -1,40 +1,55 @@
 import React from 'react';
 import './Correlation.css';
+import { useContext } from 'react';
+import { AppContext } from '../../ContextApi/ContextApi';
 
 const Correlation = () => {
-  const cryptos = ['BTC', 'ETH', 'SOL', 'BNB', 'TDS'];
-  // Sample correlation matrix (values between -1 and 1)
-  const matrix = [
-    [1, 0.85, 0.65, 0.72, 0.2],
-    [0.85, 1, 0.70, 0.68, 0.8],
-    [0.65, 0.70, 1, 0.60, 0.1],
-    [0.72, 0.68, 0.60, 1, 0.4],
-    [0.72, 0.68, 0.60, 1, 0.7],
+  const { dataCorrelation } = useContext(AppContext)
 
-  ];
+  if (!dataCorrelation || !dataCorrelation.symbols || !dataCorrelation.matrix) {
+    return <div>Loading...</div>;
+  }
+
+  const cryptos = dataCorrelation.symbols;
+  const matrix = dataCorrelation.matrix;
+
+  const getClass = (value) => {
+    if (value >= 0.75) return 'high';
+    if (value >= 0.5) return 'medium';
+    if (value <= -0.75) return 'inverse-strong';
+    if (value <= -0.5) return 'inverse';
+    return 'low';
+  };
+
 
   return (
     <div className="correlation-main">
-      <h2>Tabela de Correlação de Criptomoedas</h2>
+      <h2>Tabela de Correlação</h2>
+
       <div className="correlation-table-wrapper">
         <table className="correlation-table">
           <thead>
             <tr>
               <th></th>
               {cryptos.map((sym) => (
-                <th key={sym}>{sym}</th>
+                <th key={sym}>{sym.replace('USDT', '')}</th>
               ))}
             </tr>
           </thead>
+
           <tbody>
             {cryptos.map((sym, rowIndex) => (
               <tr key={sym}>
-                <td className="crypto-label">{sym}</td>
-                {matrix[rowIndex].map((value, colIndex) => (
-                  <td key={colIndex} className={
-                    value > 0.8 ? 'high' : value > 0.5 ? 'medium' : 'low'
-                  }>
-                    {value.toFixed(2)}
+                <td className="crypto-label">
+                  {sym.replace('USDT', '')}
+                </td>
+
+                {matrix[rowIndex]?.map((value, colIndex) => (
+                  <td
+                    key={colIndex}
+                    className={getClass(value)}
+                  >
+                    {Number(value).toFixed(2)}
                   </td>
                 ))}
               </tr>

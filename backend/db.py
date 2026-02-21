@@ -708,3 +708,57 @@ def get_complete_data_market_observations(symbol):
     # Desserializa o JSON armazenado
     notes_data = json.loads(row[0])
     return notes_data 
+
+#Pega todos os dados para calcular matriz de correlação
+def get_all_market_observations_to_matrix():
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT symbol, notes
+        FROM market_observations
+    """)
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    data = []
+
+    for symbol, notes_json in rows:
+        notes = json.loads(notes_json)
+        data.append({
+            "symbol": symbol,
+            "notes": notes
+        })
+    return data
+
+# PEGA SIMBOLOS COM CORRELAÇÃO
+def get_symbols_with_correlation(symbolCorrelation):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    # Extrai símbolos únicos
+    symbols = set()
+
+    for item in symbolCorrelation:
+        symbols.add(item["base_asset"])
+        symbols.add(item["correlated_asset"])
+
+    symbols = list(symbols)
+
+    # Cria placeholders dinamicamente (?, ?, ?, ...)
+    placeholders = ",".join(["?"] * len(symbols))
+
+    query = f"""
+        SELECT *
+        FROM market_observations
+        WHERE symbol IN ({placeholders})
+    """
+
+    cursor.execute(query, symbols)
+
+    rows = cursor.fetchall()
+    print(">>>>",rows)
+    conn.close()
+    return rows
+

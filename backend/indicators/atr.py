@@ -22,7 +22,7 @@ def calculate_moving_atr(data, period=5):
     return atrs
 
 
-def smooth_atr(atrs, period=365):
+def smooth_atr(atrs, period= 180):
     if len(atrs) < period:
         return []
 

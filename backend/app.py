@@ -1,30 +1,16 @@
 from flask import Flask, jsonify,request, jsonify
 from flask_cors import CORS
-import pandas as pd
 from binance.client import Client
-from datetime import datetime, timedelta, timezone
-import time
-import requests
-import zipfile
-import io
-import csv
 import logging
-import time
 from db import (
     create_table,
     salve_or_replace,
     symbolo_saved,
     create_table_timeframe_global,
     get_timeframe_global,
-    save_trend_clarifications,
     create_table_trend_clarifications,
-    clear_table_trend_clarifications,
     important_points,
     init_db,
-    save_klines,
-    conectar,
-    Delete_all_Klines,
-    get_data_klines,
     get_trend_clarifications,
     get_date_simulation,
     init_db_rsi,
@@ -34,22 +20,21 @@ from db import (
     save_vppr,
     get_data_vppr,
     init_db_atr,
-    get_atr_first_of_month,
     save_market_observations,
     get_latest_market_by_symbol,
-    clear_table_amrsi,
-    clear_table_vppr,
     remover_symbol,
     get_all_symbols,
-    get_complete_data_market_observations
+    get_complete_data_market_observations,
+
 )
-from indicators.atr import calculate_moving_atr, smooth_atr
 from indicators.rsi import get_rsi
-from operation.operation import operation
 from indicators.vppr import get_vppr
-from klines.klines import get_klines_extended, format_raw_data
+from klines.klines import  format_raw_data
 from klines.Market_observation import get_klines_observation, format_raw_data
 from price_variation.price_variation import add_price_variation
+from indicators.correlation import calculate_correlation_matrix,highest_correlation_value
+from trend_clarifications.trend_clarifications import trend_clarifications_atr
+from download_simulation.download_simulation import download_and_save_klines,download_and_save_klines
 
 
 client = Client()
@@ -68,8 +53,7 @@ init_db()
 init_db_rsi()
 ini_db_vppr()
 init_db_atr()
-
-
+calculate_correlation_matrix()
 
 # --------------------------------
 # Função para calcular RSI INICIO
@@ -198,11 +182,9 @@ def get_last_symbol():
 # --------------------------------------------------------
 @app.route("/api/timeframe", methods=["GET", "POST"])
 def filter_time():
-
     if request.method == "POST":
         data = request.get_json() or request.form
         time = data.get("time", "").strip()
-
 
         if not time:
             return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
@@ -247,160 +229,6 @@ def update_klines():
         print(f"❌ Erro ao baixar/salvar klines: {str(e)}")
         return jsonify({"erro": str(e)}), 500
 
-
-# --------------------------------------------------
-# 📊 1️⃣  Baixar múltiplos anos do ativo primario
-# --------------------------------------------------
-def download_historical_klines(
-    symbol, intervalo, start_year, end_year, date_start=None, date_end=None
-):
-    all_klines = []
-    base_url = "https://data.binance.vision/data/spot/monthly/klines"
-
-    for year in range(start_year, end_year + 1):
-        for month in range(1, 13):
-            file_name = f"{symbol}-{intervalo}-{year}-{month:02d}.zip"
-            url = f"{base_url}/{symbol}/{intervalo}/{file_name}"
-
-            try:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    with zipfile.ZipFile(io.BytesIO(response.content)) as z:
-                        csv_name = file_name.replace(".zip", ".csv")
-                        with z.open(csv_name) as f:
-                            reader = csv.reader(io.TextIOWrapper(f))
-                            next(reader, None)  # Pula cabeçalho, se houver
-                            klines = [row for row in reader if row]
-                            all_klines.extend(klines)
-                else:
-                    print(f"Arquivo não encontrado: {url}")
-            except Exception as e:
-                print(f"Erro ao baixar {url}: {e}")
-                continue
-
-    # Filtrar por datas, se fornecidas
-    if date_start and date_end:
-        start_ms = int(
-            datetime.strptime(date_start, "%Y-%m-%d")
-            .replace(tzinfo=timezone.utc)
-            .timestamp()
-            * 1000
-        )
-        end_ms = int(
-            datetime.strptime(date_end, "%Y-%m-%d")
-            .replace(tzinfo=timezone.utc)
-            .timestamp()
-            * 1000
-        )
-        all_klines = [k for k in all_klines if start_ms <= int(k[0]) <= end_ms]
-
-    # Formatar para o mesmo formato da API (11 colunas)
-    klines_formatados = [tuple(k[:11]) for k in all_klines if k]
-    return klines_formatados
-
-
-# --------------------------------------------------
-# 📊 1️⃣  Guarda no banco de dados do ativo primario
-# --------------------------------------------------
-def download_and_save_klines(
-    symbol, intervalo, date_start=None, date_end=None, days=None, clean_before=True
-):
-    if clean_before:
-        Delete_all_Klines()
-        clear_table_trend_clarifications()
-        clear_table_vppr()
-        clear_table_amrsi()
-
-    all_klines = []
-
-    # Definir período
-    if date_start and date_end:
-        start_dt = datetime.strptime(date_start, "%Y-%m-%d")
-        end_dt = datetime.strptime(date_end, "%Y-%m-%d")
-        start_ms = int(start_dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
-        end_ms = int(end_dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
-
-        # Se período for longo (> 1 ano), usar dados históricos
-        if (end_dt - start_dt).days > 365:
-            start_year = start_dt.year
-            end_year = end_dt.year
-            all_klines = download_historical_klines(
-                symbol, intervalo, start_year, end_year, date_start, date_end
-            )
-            # Complementar com API para dados após o último arquivo mensal
-            last_kline_ms = int(all_klines[-1][0]) if all_klines else start_ms
-            if last_kline_ms < end_ms:
-                while last_kline_ms < end_ms:
-                    params = {
-                        "symbol": symbol,
-                        "interval": intervalo,
-                        "startTime": last_kline_ms + 1,
-                        "limit": 1000,  # Limite padrão da API é 1000
-                    }
-                    if end_ms:
-                        params["endTime"] = end_ms
-
-                    batch = client.get_klines(**params)
-                    if not batch:
-                        break
-                    all_klines.extend(batch)
-                    last_kline_ms = batch[-1][0]
-                    time.sleep(0.3)  # Evitar rate limit
-        else:
-            # Período curto, usar apenas API
-            while True:
-                params = {
-                    "symbol": symbol,
-                    "interval": intervalo,
-                    "startTime": start_ms,
-                    "limit": 1000,
-                }
-                if end_ms:
-                    params["endTime"] = end_ms
-
-                batch = client.get_klines(**params)
-                if not batch:
-                    break
-                all_klines.extend(batch)
-                if end_ms and batch[-1][0] >= end_ms:
-                    break
-                start_ms = batch[-1][0] + 1
-                time.sleep(0.3)
-    elif days:
-        # Lógica para days (usar API)
-        start_ms = int(
-            (datetime.now(timezone.utc) - timedelta(days=int(days))).timestamp() * 1000
-        )
-        end_ms = None
-        while True:
-            params = {
-                "symbol": symbol,
-                "interval": intervalo,
-                "startTime": start_ms,
-                "limit": 1000,
-            }
-            batch = client.get_klines(**params)
-            if not batch:
-                break
-            all_klines.extend(batch)
-            start_ms = batch[-1][0] + 1
-            time.sleep(0.3)
-    else:
-        raise ValueError("Você deve passar dias ou date_start/date_end")
-
-    # Formatar e salvar
-    klines_formatados = [tuple(k[:11]) for k in all_klines]
-    conn = conectar()
-    save_klines(
-        conn,
-        symbol,
-        intervalo,
-        klines_formatados,
-        days=days,
-        days_start=date_start,
-        days_end=date_end,
-    )
-    conn.close()
 
 
 # ============================SIMULAR inicio============================
@@ -468,1133 +296,12 @@ def filter_price_atr():
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
 
-    salve_or_replace(symbol)
-
-    #  Recupera do banco (só pra confirmar ou usar daqui pra frente)
-    symbol_primary = symbolo_saved()
-
-    #  Busca os klines na Binance
-    time = get_timeframe_global()
     try:
-        if modo == "simulation":
-            # 🔁 Limpa os dados antigos da tabela antes de salvar os novos
-            clear_table_trend_clarifications()
-            # 🔁 Pega os dados do banco
-            raw_data = get_data_klines(symbol_primary, time)
-            data = format_raw_data(raw_data)
-
-        else:
-            clear_table_trend_clarifications()
-            # 🔁 Pega os dados em tempo real da Binance
-            raw_data = get_klines_extended(
-                symbol=symbol_primary, interval=time, total=2160
-            )
-            data = format_raw_data(raw_data)
-
+        movements = trend_clarifications_atr(symbol, modo)
+        return jsonify(movements), 200
     except Exception as e:
-        print(f"❌ Erro Binance: {str(e)}")
-        return jsonify({"erro": str(e)}), 500
-
-    # Formata os dados e extrai preços de fechamento e tempos
-    data = format_raw_data(raw_data)
-    closes = [item["Fechamento"] for item in data]
-    timestamps = [item["Tempo"] for item in data]
-
-    # Calcula o ATR suavizado
-    atrs = calculate_moving_atr(data)
-    atr_suave = smooth_atr(atrs)
-
-    if not atr_suave:
-        return jsonify({"erro": "ATR não pôde ser calculado."}), 400
-
-    if time == "1d":
-        verify_time_multiply = 3
-    else:
-        verify_time_multiply = 5
-
-    # Define os limites com base no ATR
-    atr_ultima_suave = get_atr_first_of_month()[-1][0]
-
-    atr_mult = atr_ultima_suave * verify_time_multiply
-
-    # Aredonda os valores
-    round_atr = round(atr_mult, 2)
-    confir = round_atr / 2
-    confir_round = round(confir, 2)
-
-    limit = round_atr
-    confirmar = confir_round
-
-    # Inicializa variáveis de controle
-    cont = 0
-    movements = []
-    state = "inicio"
-    top = closes[0]
-    bottom = closes[0]
-    reference_point = closes[0]
-    starting_point = closes[0]
-    current_trend = None
-
-    # pivos de tendencia
-    last_pivot_high = None
-    last_pivot_down = None
-
-    # pivos de reação natural secundária
-    last_pivot_reaction_sec_high = None
-    last_pivot_reaction_sec_low = None
-    last_pivot_reaction_sec_high_temp = None
-    last_pivot_reaction_sec_low_temp = None
-
-    # pivos de rally natural
-    last_pivot_rally_high = None
-    last_pivot_rally_low = None
-    last_pivot_rally_high_temp = None
-    last_pivot_rally_low_temp = None
-    
-    # pivos de reação secundária dentro do rally natural
-    last_pivot_rally_sec_low = None
-    last_pivot_rally_sec_low_temp = None
-    last_pivot_rally_sec_high = None
-    last_pivot_rally_sec_high_temp = None
-
-
-
-    # Primeiro ponto é sempre um Rally Natural Inicial
-    movements.append(
-        {
-            "closeTime": timestamps[0],
-            "closePrice": reference_point,
-            "tipo": "Rally Natural (inicial)",
-            "limite": limit,
-        }
-    )
-
-    for i in range(1, len(closes)):
-        price = closes[i]
-        tempo = timestamps[i]
-        added_movement = False  # Controle para evitar duplicação
-        cont += 1
-        price = price
-        # === ESTADO INICIAL ===
-        # Detecta início de tendência
-        if state == "inicio":
-            if not added_movement and price > reference_point + limit:
-                # Inicia tendência de alta
-                state = "tendencia_alta"
-                current_trend = "Alta"
-                last_pivot_high = price
-                top = price
-                reference_point = price
-                movements.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": price,
-                        "tipo": "Tendência Alta (compra)",
-                        "limite": limit,
-                    }
-                )
-                added_movement = True
-
-            elif not added_movement and price < reference_point - limit:
-                # Inicia tendência de baixa
-                state = "tendencia_baixa"
-                current_trend = "Baixa"
-                last_pivot_down = price
-                bottom = price
-                reference_point = price
-                movements.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": price,
-                        "tipo": "Tendência Baixa (venda)",
-                        "limite": limit,
-                    }
-                )
-                added_movement = True
-
-        # === TENDÊNCIA DE ALTA ===
-        elif not added_movement and state == "tendencia_alta":
-            if price > top:
-                # Continua tendência de alta
-                top = price
-                last_pivot_high = price
-                reference_point = price
-                movements.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": price,
-                        "tipo": "Tendência Alta (topo)",
-                        "limite": limit,
-                    }
-                )
-                added_movement = True
-            elif not added_movement and price < top - limit:
-                # Transição para reação natural (correção)
-                state = "reacao_natural"
-                last_pivot_rally_high_temp = price
-                bottom = price
-                reference_point = price
-                movements.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": price,
-                        "tipo": "Reação Natural (Alta)",
-                        "limite": limit,
-                    }
-                )
-                added_movement = True
-
-        # === TENDÊNCIA DE BAIXA ===
-        elif not added_movement and state == "tendencia_baixa":
-            if price < bottom:
-                # Continua tendência de baixa
-                bottom = price
-                last_pivot_down = price
-                reference_point = price
-                movements.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": price,
-                        "tipo": "Tendência Baixa (fundo)",
-                        "limite": limit,
-                    }
-                )
-                added_movement = True
-            elif not added_movement and price > bottom + limit:
-                # Transição para reação natural (correção)
-                state = "reacao_natural"
-                top = price
-                last_pivot_rally_low_temp = price
-                reference_point = price
-                movements.append(
-                    {
-                        "closeTime": tempo,
-                        "closePrice": price,
-                        "tipo": "Reação Natural (Baixa)",
-                        "limite": limit,
-                    }
-                )
-                added_movement = True
-
-        # === REAÇÃO NATURAL ===
-        elif state == "reacao_natural":
-            if current_trend == "Alta":
-                # Vindo de tendência de alta
-                if not added_movement and price < bottom:
-                    # Continuação da reação
-                    bottom = price
-                    last_pivot_rally_high_temp = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação Natural (fundo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_high is not None
-                    and price > bottom + limit
-                    and price < last_pivot_high
-                ):
-                    # Rally Natural (recuperacao)
-                    state = "rally_natural"
-                    top = price
-                    last_pivot_rally_high = last_pivot_rally_high_temp
-                    last_pivot_rally_low = None
-                    starting_point = None
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (Alta)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    last_pivot_high = price
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and starting_point is not None
-                    and price < starting_point - confirmar
-                ):
-                    # Reversão para tendência de baixa
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    bottom = price
-                    last_pivot_down = price
-                    starting_point = None
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
-                ):
-
-                    # Reversão para tendência de baixa
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    bottom = price
-                    last_pivot_down = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_down is not None
-                    and price < last_pivot_down - confirmar
-                ):
-
-                    # Reversão para tendência de baixa
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    bottom = price
-                    last_pivot_down = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-            elif current_trend == "Baixa":
-                # Vindo de tendência baixa
-                if not added_movement and price > top:
-                    # Continuação da reação
-                    top = price
-                    last_pivot_rally_low_temp = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação Natural (topo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_down is not None
-                    and price < top - limit
-                    and price > last_pivot_down
-                ):
-                    # Rally Natural (respiro de baixa)
-                    state = "rally_natural"
-                    bottom = price
-                    last_pivot_rally_low = last_pivot_rally_low_temp
-                    last_pivot_rally_high = None
-                    starting_point = None
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (Baixa)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_down is not None
-                    and price < last_pivot_down - confirmar
-                ):
-                    # Reversão para tendência de baixa
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    bottom = price
-                    last_pivot_down = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and starting_point is not None
-                    and price > starting_point + confirmar
-                ):
-                    # Reversão para tendência de alta
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    top = price
-                    last_pivot_high = price
-                    starting_point = None
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    top = price
-                    last_pivot_high = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    top = price
-                    last_pivot_high = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-        # === RALLY NATURAL ===
-        elif state == "rally_natural":
-            if current_trend == "Alta":
-                # Vindo de tendência alta
-                if (
-                    not added_movement
-                    and price > top
-                    and price < last_pivot_high
-                ):
-                    # Continuação do rally
-                    top = price
-                    last_pivot_reaction_sec_high_temp = price
-                    last_pivot_rally_sec_high = last_pivot_rally_sec_high_temp
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (topo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
-                ):
-                    # Retomada da tendência de alta
-                    state = "tendencia_alta"
-                    last_pivot_high = price
-                    current_trend = "Alta"
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_rally_high is not None
-                    and price < top - limit
-                    and price > last_pivot_rally_high
-                ):
-                    state = "reacao_secundaria"
-                    bottom = price
-                    last_pivot_reaction_sec_high = last_pivot_reaction_sec_high_temp
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária (Alta)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
-                ):
-                    state = "tendencia_baixa"
-                    bottom = price
-                    current_trend = "Baixa"
-                    last_pivot_down = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                added_movement = True
-
-            elif current_trend == "Baixa":
-                # Vindo de tendência baixa
-                if (
-                    not added_movement
-                    and price < bottom
-                    and price > last_pivot_down
-                ):
-                    # Continuação do rally
-                    bottom = price
-                    reference_point = price
-                    last_pivot_reaction_sec_low_temp = price
-                    last_pivot_rally_sec_low = last_pivot_rally_sec_low_temp
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (fundo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement and price < last_pivot_down - confirmar
-                ):
-                    # Retomada da tendência de baixa
-                    bottom = price
-                    last_pivot_down = price
-                    reference_point = price
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_rally_low is not None
-                    and price > bottom + limit
-                    and price < last_pivot_rally_low
-                ):
-                    state = "reacao_secundaria"
-                    top = price
-                    last_pivot_reaction_sec_low = last_pivot_reaction_sec_low_temp
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
-                ):
-                    state = "tendencia_alta"
-                    top = price
-                    current_trend = "Alta"
-                    last_pivot_high = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                added_movement = True
-
-        # ======== Reação secundária ===========
-        elif state == "reacao_secundaria":
-            if current_trend == "Alta":
-                if not added_movement and price < bottom:
-                    last_pivot_rally_sec_high_temp = bottom
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária (Fundo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_high is not None
-                    and price > bottom + limit
-                    and price < last_pivot_reaction_sec_high
-                ):
-                    # rally secundário
-                    state = "rally_secundario"
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally secundário (Alta)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_high is not None
-                    and price > bottom + limit
-                    and price > last_pivot_reaction_sec_high + confirmar
-                    and price < last_pivot_high
-                ):
-                    #  volta ao rally
-                    state = "rally_natural"
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (retorno)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    last_pivot_high = price
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                elif (
-                    not added_movement
-                    and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
-                ):
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    last_pivot_down = price
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_rally_sec_high is not None
-                    and price < last_pivot_rally_sec_high - confirmar
-                ):
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    last_pivot_down = price
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-            elif current_trend == "Baixa":
-                # vindo de tendência de baixa
-                if not added_movement and price > top:
-                    top = price
-                    last_pivot_rally_sec_low_temp = top
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária (topo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_low is not None
-                    and price < top - limit
-                    and price > last_pivot_reaction_sec_low
-                ):
-                    #  volta ao rally
-                    state = "rally_secundario"
-                    bottom = price
-                    current_trend = "Baixa"
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally secundário (Baixa)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_low is not None
-                    and price < top - limit
-                    and price < last_pivot_reaction_sec_low - confirmar
-                    and price > last_pivot_down
-                ):
-                    #  volta ao rally
-                    state = "rally_natural"
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (retorno)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_down is not None
-                    and last_pivot_down
-                    and price < last_pivot_down - confirmar
-                ):
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    last_pivot_down = price
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    last_pivot_high = price
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_rally_sec_low is not None
-                    and price > last_pivot_rally_sec_low + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    last_pivot_high = price
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                    
-
-            # ======== Reação secundária ===========
-        elif state == "rally_secundario":
-            if current_trend == "Alta":
-                if not added_movement and price > top:
-                    top = price
-                    reference_point = price
-                    last_pivot_rally_sec_high = last_pivot_rally_sec_high_temp
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally secundário (Topo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_low is not None
-                    and price < top - limit
-                    and price > last_pivot_reaction_sec_high
-                ):
-                    state = "reacao_secundaria"
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                    # retorno do rally secundario para reacao
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_high is not None
-                    and price > last_pivot_reaction_sec_high + confirmar
-                    and price < last_pivot_high
-                ):
-                    state = "rally_natural"
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (retorno)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    last_pivot_high = price
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_rally_high is not None
-                    and price < top - limit
-                    and price > last_pivot_rally_high
-                ):
-                    state = "reacao_secundaria"
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
-                ):
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    bottom = price
-                    last_pivot_down = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    bottom = price
-                    last_pivot_down = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-            elif current_trend == "Baixa":
-                # vindo de tendência de baixa
-                if not added_movement and price < bottom:
-                    bottom = price
-                    last_pivot_rally_sec_low = last_pivot_rally_sec_low_temp
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally secundário (Fundo)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_low is not None
-                    and price > bottom + limit
-                    and price < last_pivot_reaction_sec_low
-                ):
-                    state = "reacao_secundaria"
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária (Baixa)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                    # retorno do rally secundario para reacao
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_low is not None
-                    and price < last_pivot_reaction_sec_low - confirmar
-                    and price > last_pivot_down
-                ):
-                    state = "rally_natural"
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (retorno)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_low is not None
-                    and price > last_pivot_down
-                    and price < last_pivot_reaction_sec_low - confirmar
-                ):
-                    # volta Rally natural
-                    state = "rally_natural"
-                    bottom = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Rally Natural (Baixa)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-                elif (
-                    not added_movement
-                    and last_pivot_reaction_sec_low is not None
-                    and price > bottom + limit
-                    and price < last_pivot_rally_low
-                ):
-                    state = "reacao_secundaria"
-                    top = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Reação secundária",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                # reverse trendUp
-                elif (
-                    not added_movement
-                    and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
-                ):
-                    state = "tendencia_alta"
-                    current_trend = "Alta"
-                    top = price
-                    last_pivot_high = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Alta (compra)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-                elif (
-                    not added_movement
-                    and last_pivot_down is not None
-                    and price < last_pivot_down - confirmar
-                ):
-                    state = "tendencia_baixa"
-                    current_trend = "Baixa"
-                    bottom = price
-                    last_pivot_down = price
-                    reference_point = price
-                    movements.append(
-                        {
-                            "closeTime": tempo,
-                            "closePrice": price,
-                            "tipo": "Tendência Baixa (venda)",
-                            "limite": limit,
-                        }
-                    )
-                    added_movement = True
-
-    # Cria lista de tuplas para bulk insert
-    movements_to_save = []
-    operation(movements)
-
-    for p in movements:
-        date = p["closeTime"]
-        price = p["closePrice"]
-        type = p["tipo"]
-        atr = p["limite"]
-
-        movements_to_save.append((date, price, type, atr))
-
-    # Salva todos os dados de uma vez
-    save_trend_clarifications(movements_to_save)
-
-    return jsonify(movements)
+        print(f"❌ Erro em filter_price_atr: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 # -----------------------------------------------
@@ -1666,7 +373,7 @@ def update_market_observations():
                 "updated_symbols": []
             }), 200
         
-        time = get_timeframe_global()
+        time_flame = get_timeframe_global()
         updated_data = []
         
         for symbol in symbols:
@@ -1683,7 +390,7 @@ def update_market_observations():
                 symbol_clean = symbol.strip().upper()
                 
                 # Busca os dados mais recentes da Binance
-                raw_data = get_klines_observation(symbol=symbol_clean, interval=time, total=2000)
+                raw_data = get_klines_observation(symbol=symbol_clean, interval=time_flame, total=1500)
                 data = format_raw_data(raw_data)
                 
                 # Adiciona variação de preço
@@ -1715,23 +422,65 @@ def update_market_observations():
         
     except Exception as e:
         print(f"❌ Erro geral em update_market_observations: {str(e)}")
-        return jsonify({"error": f"Erro ao atualizar observações: {str(e)}"}), 500
 
+        return jsonify({"error": f"Erro ao atualizar observações: {str(e)}"}), 500
+    
+# pega dados de observação de mercado 
 @app.route("/api/get_market_observation", methods=["POST"])
 def get_market_observation():
     data = request.get_json()
-
     if not data or "symbol" not in data:
         return jsonify({"error": "Symbol não enviado"}), 400
 
     symbol = data["symbol"]
-
     result = get_complete_data_market_observations(symbol)
-
 
     return jsonify({"data": result})
 
- 
+#================================================================
+# Pega dos dados calculados para matriz de correlação de pearson
+#================================================================
+@app.route("/api/get_correlation",methods=["GET"])
+def get_correlation():
+    result = calculate_correlation_matrix(window=30)
+    if not result:
+        return jsonify({"error": "Matriz de correlação vazia"}), 400
+    
+    return jsonify(result)
+
+#pega símbolos correlacionados com ativo principal
+@app.route("/api/get_symbols_with_correlation",methods=["GET"])
+def symbols_with_correlation():
+
+    symbol = request.args.get("symbol","BTCUSDT")
+    result = highest_correlation_value(symbol)
+    if not result or not symbol:
+        return jsonify({"Error": "Ao pegar símbolos correlacionados."}),400
+    
+    return jsonify(result)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

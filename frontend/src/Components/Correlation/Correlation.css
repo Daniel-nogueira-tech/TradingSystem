@@ -42,9 +42,15 @@
 }
 
 .medium {
-  background-color: var(--background);
+  background-color:  var(--background);
 }
 
 .low {
-  background-color: red;
+  background-color: rgba(171, 171, 171, 0.653);
+}
+.inverse-strong{
+    background-color: red;
+}
+.inverse{
+background-color:  var(--background);
 }

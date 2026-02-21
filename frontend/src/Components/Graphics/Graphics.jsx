@@ -5,6 +5,7 @@ import ChartRsi from '../MyChart/ChartRsi';
 import ChartVppr from '../MyChart/ChartVppr';
 import { AppContext } from '../../ContextApi/ContextApi';
 import 'primeicons/primeicons.css';
+import PressureGauge from '../MyChart/PressureGauge';
 
 
 const Graphics = () => {
@@ -130,7 +131,6 @@ const Graphics = () => {
 
   ///
 
-
   return (
     <div className='graphics-main' >
       <div className='time-frame'>
@@ -216,7 +216,7 @@ const Graphics = () => {
 
 
         <div>
-          <h3>Pontos importantes</h3>
+          <h3>Pontos de Pivôs</h3>
           <div>
             <div className='button-infor'>
 
@@ -288,6 +288,9 @@ const Graphics = () => {
 
       <div className='graphics' id='ChartRsi'>
         <ChartRsi />
+      </div>
+      <div className='graphics' id='PressureGauge'>
+        <PressureGauge/>
       </div>
 
 
