@@ -19,6 +19,7 @@ def calculate_moving_atr(data, period=5):
 
         atr = sum(true_ranges) / period
         atrs.append({"index": i, "Tempo": data[i]["Tempo"], "ATR": atr})
+        #print(f"Calculado ATR para index {i} ({data[i]['Tempo']}): {atr}")
     return atrs
 
 

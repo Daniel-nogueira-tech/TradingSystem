@@ -19,7 +19,7 @@ const ContextApi = (props) => {
   const [values, setValues] = useState([]);
   const [labels, setLabels] = useState([]);
   const [atr, setAtr] = useState([]);
-  const [dadosPrice, setDadosPrice] = useState([]);
+  const [dadosPrice, setDadosPrice] = useState([]); // DADOS completos do ativo primária (open, close, high, low, volume, etc)
   const inputRefMain = useRef(null);
   const [symbol, setSymbol] = useState("");
   const toast = useRef(null);
@@ -538,17 +538,25 @@ const ContextApi = (props) => {
    * ////////////////////////////////////////////////////////////////////////
    ---------------------------------//-----------------------------------------*/
 
-  /*------------------------------------------------------------------
-    1️⃣ Função para Selecionae datas para simulação do ativo Primária
-   -------------------------------------------------------------------*/
+  /*-----------------------------------------------------------------------
+    1️⃣ Função para (BAIXAR) dados simulação (envia as datas para o backend)
+   -------------------------------------------------------------------------*/
   const dateSimulation = async () => {
     if (loadingSimulation) return;
     setLoadingSimulation(true);
     setDownloadedData(false);
     try {
-      const response = await axios.post(
-        `${url}/api/update_klines`,
-        {}, // corpo vazio
+      const response = await axios.post(`${url}/api/update_klines`, {},
+        {
+          params: {
+            date_start: dateSimulationStart,
+            date_end: dateSimulationEnd,
+            days: daysValue,
+            symbol: symbol
+          }
+        }
+      );
+      const res = await axios.post(`${url}/api/update_klines_correlation`, {},
         {
           params: {
             date_start: dateSimulationStart,
@@ -566,14 +574,15 @@ const ContextApi = (props) => {
 
       getDateSimulation();
 
-      // ✅ Toast de sucesso
-      toast.current.show({
-        severity: "success",
-        summary: 'Sucesso!',
-        detail: `Os dados para simular foram baixados!`,
-        life: 5000
-      });
-
+      if (response.data?.mensagem || res.data?.mensagem) {
+        // ✅ Toast de sucesso
+        toast.current.show({
+          severity: "success",
+          summary: 'Sucesso!',
+          detail: `Os dados para simular foram baixados!`,
+          life: 5000
+        });
+      }
       setDownloadedData(true);
     } catch (error) {
       // ❌ Toast de erro
@@ -1096,7 +1105,20 @@ const ContextApi = (props) => {
 
   useEffect(() => {
     // dados de classificação simulados 
-    const movements = simulationValueDataComplete;
+    let movements = [];
+    if (modo === "realTimeMode") {
+      movements = dadosPrice.map(m => ({
+        ...m,
+        tipo: String(m.tipo || "").trim(),
+      }));
+    } else {
+      movements = simulationValueDataComplete;
+    }
+
+    if (!movements || movements.length === 0) {
+      return;
+    }
+    console.log('movements:', movements);
 
     // variaveis e constantes de controle
     let naturalReaction = null;
@@ -1210,6 +1232,7 @@ const ContextApi = (props) => {
       let encontrouRallyNaturalParaSec = false;
       let encontrouRallyNaturalSec_retest = false;
       let reacaoSecundaria = false;
+
 
       for (let i = movements.length - 1; i >= 0; i--) {
         const movement = movements[i];
@@ -1597,7 +1620,7 @@ const ContextApi = (props) => {
     // ===============================
     if (pivo && naturalReaction && canExecuteReactionRef.current) {
       const atr = pivo.atr;
-      const tolerance = atr / 3.5;
+      const tolerance = atr / 3;
       const high = pivo.closePrice + tolerance;
       const low = pivo.closePrice - tolerance;
       const lowBuy = pivo.closePrice - (tolerance * 2);
@@ -1689,6 +1712,8 @@ const ContextApi = (props) => {
     // ======================================================================
     // RETEST NO PIVO DE RALLY EM UMA REAÇÃO NATURAL (pullback pós-breakout)
     // ======================================================================
+    console.log("pivoRallyPrimary", pivoRallyPrimary);
+
     if (pivoRallyPrimary && naturalReaction && canExecuteReactionRef.current) {
       const atr = pivoRallyPrimary.atr;
       const tolerance = atr / 3;
@@ -1730,11 +1755,57 @@ const ContextApi = (props) => {
         };
       };
     };
+    // ======================================================================
+    // RETEST NO PIVO DE RALLY EM UMA REAÇÃO SECUNDÁRIA (pullback pós-breakout)
+    // ======================================================================
+    if (pivoRallyPrimary && naturalReactionSec && canExecuteReactionSecRef.current) {
+      const atr = pivoRallyPrimary.atr;
+      const tolerance = atr / 3;
+      const high = pivoRallyPrimary.closePrice + tolerance;
+      const low = pivoRallyPrimary.closePrice - tolerance;
+      const buyPoint = pivoRallyPrimary.closePrice + atr / 2;
+      const sellPoint = pivoRallyPrimary.closePrice - atr / 2;
+
+      const eventId = buildEventId(pivoRallyPrimary, naturalReactionSec);
+      if (eventId && lastRallyRetestIdRef.current !== eventId) {
+        lastRallyRetestIdRef.current = eventId;
+        // 🟢 Compra rally
+        if (
+          currentTrend === "Tendência Alta" &&
+          naturalReactionSec.closePrice <= high &&
+          naturalReactionSec.closePrice >= low
+        ) {
+          setRetestPoints([
+            { name: "pivot", value: pivoRallyPrimary.closePrice },
+            { name: "time", value: naturalReactionSec.closeTime },
+            { name: "buy", value: buyPoint },
+            { name: "stop", value: sellPoint },
+            { name: "type", value: "ENTRY_BUY_RALLY" }
+          ]);
+        };
+        // 🔴 Venda rally
+        if (
+          currentTrend === "Tendência Baixa" &&
+          naturalReactionSec.closePrice <= high &&
+          naturalReactionSec.closePrice >= low
+        ) {
+          setRetestPoints([
+            { name: "pivot", value: pivoRallyPrimary.closePrice },
+            { name: "time", value: naturalReactionSec.closeTime },
+            { name: "sell", value: sellPoint },
+            { name: "stop", value: buyPoint },
+            { name: "type", value: "ENTRY_SELL_RALLY" }
+          ]);
+        };
+      };
+    };
 
     // ===============================
     // RETEST NO PIVO DE RALLY EM UMA 
     // REAÇÃO SECUNDÁRIA
     // ===============================
+    console.log("pivoRally", pivoRally);
+
     if (pivoRally && naturalReactionSec && canExecuteReactionSecRef.current) {
       const atr = pivoRally.atr;
       const tolerance = atr / 3;
@@ -2290,7 +2361,7 @@ const ContextApi = (props) => {
         <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', zIndex: 9999 }}>
           <div style={{ textAlign: 'center', color: '#fff' }}>
             <ProgressSpinner style={{ width: 64, height: 64 }} strokeWidth="6" />
-            <div style={{ marginTop: 12 }}>Loading...</div>
+            <div style={{ marginTop: 12 }}>Updating data...</div>
           </div>
         </div>
       )}

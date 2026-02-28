@@ -416,6 +416,102 @@ def get_date_simulation():
     conn.close()
     return result
 
+#-----------------------------------------------------------
+# pega os dados do banco para simulação do ativo correlato
+#-----------------------------------------------------------
+def init_db_correlation():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS klines_Correlation (
+            symbol TEXT,
+            days INTEGER,
+            days_start TEXT,
+            days_end TEXT,
+            intervalo TEXT,
+            open_time INTEGER,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            volume REAL,
+            close_time INTEGER,
+            quote_asset_volume REAL,
+            number_of_trades INTEGER,
+            taker_buy_base_asset_volume REAL,
+            taker_buy_quote_asset_volume REAL,
+            PRIMARY KEY (symbol, intervalo, open_time)
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+# insere os klines no banco
+def save_klines_correlation(
+    conn, symbol, intervalo, klines, days=None, days_start=None, days_end=None
+):
+    cursor = conn.cursor()
+
+    if days is not None:
+        days_start = None
+        days_end = None
+    else:
+        days = None
+
+    dados_completos = [
+        (symbol, days, days_start, days_end, intervalo, *k) for k in klines
+    ]
+
+    cursor.executemany(
+        """
+        INSERT OR REPLACE INTO klines_Correlation (
+            symbol, days, days_start, days_end, intervalo,
+            open_time, open, high, low, close, volume,
+            close_time, quote_asset_volume, number_of_trades,
+            taker_buy_base_asset_volume, taker_buy_quote_asset_volume
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        dados_completos,
+    )
+    conn.commit()
+
+
+# deleta os dados
+def Delete_all_Klines_correlation():
+    print("🗑️ Deletando todos os registros da tabela klines_Correlation...")
+    try:
+        conn = conectar()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM klines_Correlation")
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Erro ao deletar klines: {e}")
+        raise
+    finally:
+        conn.close()
+
+
+# pega os dados do banco para classificação
+def get_data_klines_correlation(symbol, intervalo):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT open_time, open, high, low, close, volume
+        FROM klines_Correlation
+        WHERE symbol = ? AND intervalo = ?
+        ORDER BY open_time
+        """,
+        (symbol, intervalo),
+    )
+    resultados = cursor.fetchall()
+    conn.close()
+    return resultados
+
 
 # --------------------------------
 # cria tabela para precos do atr

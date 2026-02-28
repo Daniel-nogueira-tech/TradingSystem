@@ -54,9 +54,6 @@ const PressureGauge = () => {
       PressureGauge.total = total;
     }, [assetCorrelationData]);
 
-console.log(pressure);
-
-
 
   // Template customizado para exibir symbol e variação
   const itemTemplate = (item) => {

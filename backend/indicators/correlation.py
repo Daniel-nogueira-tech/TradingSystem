@@ -64,7 +64,7 @@ def calculate_correlation_matrix(window=30):
     }
 
 #pega o simbolos com correlação 
-def highest_correlation_value(symbol, threshold=0.75, window=90):
+def highest_correlation_value(symbol, threshold=0.70, window=90):
     result = calculate_correlation_matrix(window=window)
 
     if "error" in result:

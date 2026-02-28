@@ -156,7 +156,7 @@ def trend_clarifications_atr(symbol, modo):
         # === ESTADO INICIAL ===
         # Detecta início de tendência
         if state == "inicio":
-            if not added_movement and price > reference_point + limit:
+            if not added_movement and price >= reference_point + limit:
                 # Inicia tendência de alta
                 state = "tendencia_alta"
                 current_trend = "Alta"
@@ -173,7 +173,7 @@ def trend_clarifications_atr(symbol, modo):
                 )
                 added_movement = True
 
-            elif not added_movement and price < reference_point - limit:
+            elif not added_movement and price <= reference_point - limit:
                 # Inicia tendência de baixa
                 state = "tendencia_baixa"
                 current_trend = "Baixa"
@@ -206,7 +206,7 @@ def trend_clarifications_atr(symbol, modo):
                     }
                 )
                 added_movement = True
-            elif not added_movement and price < top - limit:
+            elif not added_movement and price <= top - limit:
                 # Transição para reação natural (correção)
                 state = "reacao_natural"
                 last_pivot_rally_high_temp = price
@@ -238,7 +238,7 @@ def trend_clarifications_atr(symbol, modo):
                     }
                 )
                 added_movement = True
-            elif not added_movement and price > bottom + limit:
+            elif not added_movement and price >= bottom + limit:
                 # Transição para reação natural (correção)
                 state = "reacao_natural"
                 top = price
@@ -275,8 +275,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_high is not None
-                    and price > bottom + limit
-                    and price < last_pivot_high
+                    and price >= bottom + limit
+                    and price <= last_pivot_high
                 ):
                     # Rally Natural (recuperacao)
                     state = "rally_natural"
@@ -298,7 +298,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
+                    and price >= last_pivot_high + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
@@ -318,7 +318,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and starting_point is not None
-                    and price < starting_point - confirmar
+                    and price <= starting_point - confirmar
                 ):
                     # Reversão para tendência de baixa
                     state = "tendencia_baixa"
@@ -340,7 +340,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
+                    and price <= last_pivot_rally_high - confirmar
                 ):
 
                     # Reversão para tendência de baixa
@@ -361,7 +361,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_down is not None
-                    and price < last_pivot_down - confirmar
+                    and price <= last_pivot_down - confirmar
                 ):
 
                     # Reversão para tendência de baixa
@@ -399,8 +399,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_down is not None
-                    and price < top - limit
-                    and price > last_pivot_down
+                    and price <= top - limit
+                    and price >= last_pivot_down
                 ):
                     # Rally Natural (respiro de baixa)
                     state = "rally_natural"
@@ -422,7 +422,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_down is not None
-                    and price < last_pivot_down - confirmar
+                    and price <= last_pivot_down - confirmar
                 ):
                     # Reversão para tendência de baixa
                     state = "tendencia_baixa"
@@ -443,7 +443,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and starting_point is not None
-                    and price > starting_point + confirmar
+                    and price >= starting_point + confirmar
                 ):
                     # Reversão para tendência de alta
                     state = "tendencia_alta"
@@ -465,7 +465,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
+                    and price >= last_pivot_rally_low + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
@@ -485,7 +485,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
+                    and price >= last_pivot_high + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
@@ -528,11 +528,12 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
+                    and price >= last_pivot_high + confirmar
                 ):
                     # Retomada da tendência de alta
                     state = "tendencia_alta"
                     last_pivot_high = price
+                    last_pivot_down = None
                     current_trend = "Alta"
                     top = price
                     reference_point = price
@@ -548,8 +549,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_high is not None
-                    and price < top - limit
-                    and price > last_pivot_rally_high
+                    and price <= top - limit
+                    and price >= last_pivot_rally_high
                 ):
                     state = "reacao_secundaria"
                     bottom = price
@@ -567,12 +568,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
+                    and price <= last_pivot_rally_high - confirmar
                 ):
                     state = "tendencia_baixa"
                     bottom = price
                     current_trend = "Baixa"
                     last_pivot_down = price
+                    last_pivot_high = None
                     reference_point = price
                     movements.append(
                         {
@@ -606,11 +608,12 @@ def trend_clarifications_atr(symbol, modo):
                     )
                     added_movement = True
                 elif (
-                    not added_movement and price < last_pivot_down - confirmar
+                    not added_movement and price <= last_pivot_down - confirmar
                 ):
                     # Retomada da tendência de baixa
                     bottom = price
                     last_pivot_down = price
+                    last_pivot_high = None
                     reference_point = price
                     state = "tendencia_baixa"
                     current_trend = "Baixa"
@@ -626,8 +629,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_low is not None
-                    and price > bottom + limit
-                    and price < last_pivot_rally_low
+                    and price >= bottom + limit
+                    and price <= last_pivot_rally_low
                 ):
                     state = "reacao_secundaria"
                     top = price
@@ -645,12 +648,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
+                    and price >= last_pivot_rally_low + confirmar
                 ):
                     state = "tendencia_alta"
                     top = price
                     current_trend = "Alta"
                     last_pivot_high = price
+                    last_pivot_down = None
                     reference_point = price
                     movements.append(
                         {
@@ -682,12 +686,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_high is not None
-                    and price > bottom + limit
-                    and price < last_pivot_reaction_sec_high
+                    and price >= bottom + limit
+                    and price <= last_pivot_reaction_sec_high
                 ):
                     # rally secundário
                     state = "rally_secundario"
                     top = price
+                    last_pivot_reaction_sec_low = None
                     reference_point = price
                     movements.append(
                         {
@@ -702,9 +707,9 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_high is not None
-                    and price > bottom + limit
-                    and price > last_pivot_reaction_sec_high + confirmar
-                    and price < last_pivot_high
+                    and price >= bottom + limit
+                    and price >= last_pivot_reaction_sec_high + confirmar
+                    and price <= last_pivot_high
                 ):
                     #  volta ao rally
                     state = "rally_natural"
@@ -723,7 +728,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
+                    and price >= last_pivot_high + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
@@ -741,7 +746,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
+                    and price <= last_pivot_rally_high - confirmar
                 ):
                     state = "tendencia_baixa"
                     current_trend = "Baixa"
@@ -760,7 +765,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_sec_high is not None
-                    and price < last_pivot_rally_sec_high - confirmar
+                    and price <= last_pivot_rally_sec_high - confirmar
                 ):
                     state = "tendencia_baixa"
                     current_trend = "Baixa"
@@ -795,12 +800,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_low is not None
-                    and price < top - limit
-                    and price > last_pivot_reaction_sec_low
+                    and price <= top - limit
+                    and price >= last_pivot_reaction_sec_low
                 ):
                     #  volta ao rally
                     state = "rally_secundario"
                     bottom = price
+                    last_pivot_reaction_sec_high = None
                     current_trend = "Baixa"
                     reference_point = price
                     movements.append(
@@ -816,9 +822,9 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_low is not None
-                    and price < top - limit
-                    and price < last_pivot_reaction_sec_low - confirmar
-                    and price > last_pivot_down
+                    and price <= top - limit
+                    and price <= last_pivot_reaction_sec_low - confirmar
+                    and price >= last_pivot_down
                 ):
                     #  volta ao rally
                     state = "rally_natural"
@@ -838,7 +844,7 @@ def trend_clarifications_atr(symbol, modo):
                     not added_movement
                     and last_pivot_down is not None
                     and last_pivot_down
-                    and price < last_pivot_down - confirmar
+                    and price <= last_pivot_down - confirmar
                 ):
                     state = "tendencia_baixa"
                     current_trend = "Baixa"
@@ -857,7 +863,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
+                    and price >= last_pivot_rally_low + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
@@ -877,7 +883,7 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_sec_low is not None
-                    and price > last_pivot_rally_sec_low + confirmar
+                    and price >= last_pivot_rally_sec_low + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
@@ -914,8 +920,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_low is not None
-                    and price < top - limit
-                    and price > last_pivot_reaction_sec_high
+                    and price <= top - limit
+                    and price >= last_pivot_reaction_sec_high
                 ):
                     state = "reacao_secundaria"
                     bottom = price
@@ -933,8 +939,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_high is not None
-                    and price > last_pivot_reaction_sec_high + confirmar
-                    and price < last_pivot_high
+                    and price >= last_pivot_reaction_sec_high + confirmar
+                    and price <= last_pivot_high
                 ):
                     state = "rally_natural"
                     top = price
@@ -951,11 +957,12 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
+                    and price >= last_pivot_high + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
                     last_pivot_high = price
+                    last_pivot_down = None
                     top = price
                     reference_point = price
                     movements.append(
@@ -971,8 +978,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_high is not None
-                    and price < top - limit
-                    and price > last_pivot_rally_high
+                    and price <= top - limit
+                    and price >= last_pivot_rally_high
                 ):
                     state = "reacao_secundaria"
                     bottom = price
@@ -990,12 +997,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_high is not None
-                    and price < last_pivot_rally_high - confirmar
+                    and price <= last_pivot_rally_high - confirmar
                 ):
                     state = "tendencia_baixa"
                     current_trend = "Baixa"
                     bottom = price
                     last_pivot_down = price
+                    last_pivot_high = None
                     reference_point = price
                     movements.append(
                         {
@@ -1009,12 +1017,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_high is not None
-                    and price > last_pivot_high + confirmar
+                    and price >= last_pivot_high + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
                     bottom = price
                     last_pivot_down = price
+                    last_pivot_high = None
                     reference_point = price
                     movements.append(
                         {
@@ -1044,8 +1053,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_low is not None
-                    and price > bottom + limit
-                    and price < last_pivot_reaction_sec_low
+                    and price >= bottom + limit
+                    and price <= last_pivot_reaction_sec_low
                 ):
                     state = "reacao_secundaria"
                     top = price
@@ -1063,8 +1072,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_low is not None
-                    and price < last_pivot_reaction_sec_low - confirmar
-                    and price > last_pivot_down
+                    and price <= last_pivot_reaction_sec_low - confirmar
+                    and price >= last_pivot_down
                 ):
                     state = "rally_natural"
                     top = price
@@ -1082,8 +1091,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_low is not None
-                    and price > last_pivot_down
-                    and price < last_pivot_reaction_sec_low - confirmar
+                    and price >= last_pivot_down
+                    and price <= last_pivot_reaction_sec_low - confirmar
                 ):
                     # volta Rally natural
                     state = "rally_natural"
@@ -1102,8 +1111,8 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_reaction_sec_low is not None
-                    and price > bottom + limit
-                    and price < last_pivot_rally_low
+                    and price >= bottom + limit
+                    and price <= last_pivot_rally_low
                 ):
                     state = "reacao_secundaria"
                     top = price
@@ -1121,12 +1130,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_rally_low is not None
-                    and price > last_pivot_rally_low + confirmar
+                    and price >= last_pivot_rally_low + confirmar
                 ):
                     state = "tendencia_alta"
                     current_trend = "Alta"
                     top = price
                     last_pivot_high = price
+                    last_pivot_down = None
                     reference_point = price
                     movements.append(
                         {
@@ -1140,12 +1150,13 @@ def trend_clarifications_atr(symbol, modo):
                 elif (
                     not added_movement
                     and last_pivot_down is not None
-                    and price < last_pivot_down - confirmar
+                    and price <= last_pivot_down - confirmar
                 ):
                     state = "tendencia_baixa"
                     current_trend = "Baixa"
                     bottom = price
                     last_pivot_down = price
+                    last_pivot_high = None
                     reference_point = price
                     movements.append(
                         {

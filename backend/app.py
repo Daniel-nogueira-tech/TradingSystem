@@ -2,6 +2,7 @@ from flask import Flask, jsonify,request, jsonify
 from flask_cors import CORS
 from binance.client import Client
 import logging
+import re
 from db import (
     create_table,
     salve_or_replace,
@@ -25,17 +26,18 @@ from db import (
     remover_symbol,
     get_all_symbols,
     get_complete_data_market_observations,
+    init_db_correlation,
 
 )
 from indicators.rsi import get_rsi
-from indicators.vppr import get_vppr
+from indicators.vppr import get_vppr , get_vppr_correlation
 from klines.klines import  format_raw_data
 from klines.Market_observation import get_klines_observation, format_raw_data
 from price_variation.price_variation import add_price_variation
 from indicators.correlation import calculate_correlation_matrix,highest_correlation_value
 from trend_clarifications.trend_clarifications import trend_clarifications_atr
 from download_simulation.download_simulation import download_and_save_klines,download_and_save_klines
-
+from download_simulation.download_correlation import download_and_save_klines_correlation
 
 client = Client()
 app = Flask(__name__)
@@ -54,6 +56,7 @@ init_db_rsi()
 ini_db_vppr()
 init_db_atr()
 calculate_correlation_matrix()
+init_db_correlation()
 
 # --------------------------------
 # Função para calcular RSI INICIO
@@ -112,6 +115,12 @@ def api_vppr():
     offset = request.args.get("offset", type=int)
     limit = request.args.get("limit", type=int)
 
+    if not symbol:
+        return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
+
+    if not re.fullmatch(r"[A-Z]{5,12}", symbol) or not symbol.endswith("USDT"):
+        return jsonify({"error": "Símbolo inválido"}), 400
+
     data = get_vppr(
         symbol,
         modo=modo,
@@ -119,8 +128,48 @@ def api_vppr():
         limit=limit,
     )
 
-    save_vppr(data)
-    return jsonify(data)
+    data_correlation = get_vppr_correlation(
+        symbol,
+        modo=modo,
+        offset=offset,
+        limit=limit,
+    )
+
+    combined_data = []
+    if not data_correlation:
+        combined_data = data
+    else:
+        data_dict = {
+           item["time"]: {
+               "vppr": float(item.get("vppr", 0)),
+               "vppr_ema": float(item.get("vppr_ema", 0)),
+           }
+           for item in data
+        }
+
+        corr_dict = {
+           item["time"]: {
+               "vppr": float(item.get("vppr", 0)),
+               "vppr_ema": float(item.get("vppr_ema", 0)),
+           }
+           for item in data_correlation
+        }
+
+        common_times = data_dict.keys() & corr_dict.keys()
+
+        for ts in sorted(common_times):
+            combined_vppr = data_dict[ts]["vppr"] + corr_dict[ts]["vppr"]
+            combined_vppr_ema = (
+                data_dict[ts]["vppr_ema"] + corr_dict[ts]["vppr_ema"]
+            )
+            combined_data.append({
+                "time": ts,
+                "vppr": combined_vppr,
+                "vppr_ema": combined_vppr_ema,
+            })
+
+    save_vppr(combined_data)
+    return jsonify(combined_data)
 
 
 # ---------------------------------------------------------------
@@ -155,7 +204,6 @@ def simulate_vppr():
         for m in vppr_fatiado
     ]
     return jsonify(dados)
-
 
 # ---------------------------------------------------------
 # Função simular vppr (Volume Price Pressure Ratio) FIM
@@ -199,7 +247,7 @@ def filter_time():
 
 
 # ----------------------------------------------------------------------
-# 1️⃣ Função para atualizar o klines salvos para simular primeiro ativo
+# 1️⃣ Função para (BAIXAR) o klines salvos para simular primeiro ativo
 # ----------------------------------------------------------------------
 @app.route("/api/update_klines", methods=["GET", "POST"])
 def update_klines():
@@ -207,9 +255,12 @@ def update_klines():
     date_start = request.args.get("date_start", "").strip()
     date_end = request.args.get("date_end", "").strip()
     days = request.args.get("days", "").strip()
+    
 
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
+    if not re.fullmatch(r"[A-Z]{5,12}", symbol) or not symbol.endswith("USDT"):
+        return jsonify({"error": "Símbolo inválido"}), 400
 
     days = int(days) if days.isdigit() else None
 
@@ -230,6 +281,43 @@ def update_klines():
         return jsonify({"erro": str(e)}), 500
 
 
+# ----------------------------------------------------------------------
+# 1️⃣ Função para (BAIXAR) o klines salvos para simular ativo de correlação
+# ----------------------------------------------------------------------
+@app.route("/api/update_klines_correlation", methods=["GET", "POST"])
+def update_klines_correlation():
+    symbol = str(request.args.get("symbol", "")).strip().upper()
+    date_start = request.args.get("date_start", "").strip()
+    date_end = request.args.get("date_end", "").strip()
+    days = request.args.get("days", "").strip()
+
+    correlations= highest_correlation_value(symbol)
+        
+    if not correlations:
+       return []
+    top_symbol = correlations[0]["correlated_asset"]
+
+    if not top_symbol :
+        return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
+    if not re.fullmatch(r"[A-Z]{5,12}", top_symbol) or not top_symbol.endswith("USDT"):
+        return jsonify({"error": "Símbolo inválido"}), 400
+
+    days = int(days) if days.isdigit() else None
+
+    timeFrame = get_timeframe_global().lower()
+
+    try:
+        download_and_save_klines_correlation(
+            top_symbol,
+            intervalo=timeFrame,
+            date_start=date_start,
+            date_end=date_end,
+            days=days,
+        )
+        return jsonify({"mensagem": f"Dados de {top_symbol} atualizados com sucesso!"})
+    except Exception as e:
+        print(f"❌ Erro ao baixar/salvar klines: {str(e)}")
+        return jsonify({"erro": str(e)}), 500
 
 # ============================SIMULAR inicio============================
 # ----------------------------------------------------------------
@@ -295,6 +383,8 @@ def filter_price_atr():
     modo = request.args.get("modo", "").strip().lower()
     if not symbol:
         return jsonify({"erro": "Parâmetro 'symbol' é obrigatório"}), 400
+    if not re.fullmatch(r"[A-Z]{5,12}", symbol) or not symbol.endswith("USDT"):
+        return jsonify({"error": "Símbolo inválido"}), 400
 
     try:
         movements = trend_clarifications_atr(symbol, modo)
@@ -311,7 +401,7 @@ def filter_price_atr():
 def pivot_points():
     if request.method == "GET":
         points = important_points()
-        return jsonify(points)
+    return jsonify(points)
 
 #======================================================
 # função para retornar dados de observação do mercado
@@ -325,6 +415,8 @@ def market_observation():
 
     if not symbol:
         return jsonify({"error": "Símbolo é obrigatório."}), 400
+    if not re.fullmatch(r"[A-Z]{5,12}", symbol) or not symbol.endswith("USDT"):
+        return jsonify({"error": "Símbolo inválido"}), 400
 
     time = get_timeframe_global()
     raw_data = get_klines_observation(symbol=symbol, interval=time, total=total)
@@ -351,6 +443,7 @@ def delete_symbol_market_observation():
 
     if not data or "symbol" not in data:
        return jsonify({"error": "Symbol não enviado"}), 400
+
 
     symbol = data["symbol"]
     remover_symbol(symbol)
@@ -456,6 +549,8 @@ def symbols_with_correlation():
     result = highest_correlation_value(symbol)
     if not result or not symbol:
         return jsonify({"Error": "Ao pegar símbolos correlacionados."}),400
+    if not re.fullmatch(r"[A-Z]{5,12}", symbol) or not symbol.endswith("USDT"):
+        return jsonify({"error": "Símbolo inválido"}), 400
     
     return jsonify(result)
 
