@@ -12,6 +12,7 @@ from db import (
     Delete_all_Klines,
     clear_table_amrsi,
     clear_table_vppr,
+    delete_complete_data
 )
 
 client = Client()
@@ -80,6 +81,7 @@ def download_and_save_klines(
         clear_table_trend_clarifications()
         clear_table_vppr()
         clear_table_amrsi()
+        delete_complete_data()
 
     all_klines = []
 

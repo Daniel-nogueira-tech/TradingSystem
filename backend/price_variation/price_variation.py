@@ -1,5 +1,3 @@
-
-
 def add_price_variation(data):
     previous_close = None
 

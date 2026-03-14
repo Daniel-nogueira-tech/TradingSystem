@@ -1,5 +1,5 @@
 from binance.client import Client
-from datetime import datetime, timedelta, timezone
+from datetime import datetime
 
 
 client = Client()

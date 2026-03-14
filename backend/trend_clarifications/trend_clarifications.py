@@ -1,4 +1,5 @@
 from binance.client import Client
+from datetime import datetime
 from db import (
     salve_or_replace,
     symbolo_saved,
@@ -7,6 +8,8 @@ from db import (
     clear_table_trend_clarifications,
     get_data_klines,
     get_atr_first_of_month,
+    save_complete_data,
+    delete_complete_data
 )
 from indicators.atr import calculate_moving_atr, smooth_atr
 from operation.operation import operation
@@ -59,6 +62,7 @@ def trend_clarifications_atr(symbol, modo):
 
         else:
             clear_table_trend_clarifications()
+            delete_complete_data()
             # 🔁 Pega os dados em tempo real da Binance
             raw_data = get_klines_extended(
                 symbol=symbol_primary, interval=time, total=2160
@@ -88,7 +92,7 @@ def trend_clarifications_atr(symbol, modo):
     if time == "1d":
         verify_time_multiply = 3
     else:
-        verify_time_multiply = 5
+        verify_time_multiply = 4
 
     # Define os limites com base no ATR
     atr_ultima_suave = get_atr_first_of_month()[-1][0]
@@ -106,6 +110,7 @@ def trend_clarifications_atr(symbol, modo):
     # Inicializa variáveis de controle
     cont = 0
     movements = []
+    candles = []
     state = "inicio"
     top = closes[0]
     bottom = closes[0]
@@ -135,7 +140,7 @@ def trend_clarifications_atr(symbol, modo):
     last_pivot_rally_sec_high = None
     last_pivot_rally_sec_high_temp = None
 
-
+   
 
     # Primeiro ponto é sempre um Rally Natural Inicial
     movements.append(
@@ -146,6 +151,21 @@ def trend_clarifications_atr(symbol, modo):
             "limite": limit,
         }
     )
+    
+    # Salvar dados completos antes da classificação
+    for r in raw_data:
+        candles.append({
+            "tempo": datetime.fromtimestamp(r[0] / 1000).strftime("%Y-%m-%d %H:%M:%S"),
+            "open": r[1],
+            "high": r[2],
+            "low": r[3],
+            "close": r[4],
+            "volume": r[5]
+        })
+    
+    # Salva os dados completos em outra tabela antes de classificar
+    save_complete_data(candles)
+    print("CANDLES: ",candles)
 
     for i in range(1, len(closes)):
         price = closes[i]
@@ -1182,5 +1202,6 @@ def trend_clarifications_atr(symbol, modo):
 
     # Salva todos os dados de uma vez
     save_trend_clarifications(movements_to_save)
-    
-    return(movements)
+
+    # devolve também confirmações para o frontend
+    return movements 

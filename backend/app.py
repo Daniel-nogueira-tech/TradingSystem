@@ -1,5 +1,6 @@
 from flask import Flask, jsonify,request, jsonify
 from flask_cors import CORS
+import json
 from binance.client import Client
 import logging
 import re
@@ -27,7 +28,8 @@ from db import (
     get_all_symbols,
     get_complete_data_market_observations,
     init_db_correlation,
-
+    get_complete_data_candles_simulation,
+     get_complete_data_candles
 )
 from indicators.rsi import get_rsi
 from indicators.vppr import get_vppr , get_vppr_correlation
@@ -57,6 +59,7 @@ ini_db_vppr()
 init_db_atr()
 calculate_correlation_matrix()
 init_db_correlation()
+
 
 # --------------------------------
 # Função para calcular RSI INICIO
@@ -333,16 +336,44 @@ def simulate_price_atr():
     if not movements:
         return jsonify([])  # Nada para simular
 
-    sliced_movements =movements[offset : offset + limit]
+    sliced_movements = movements[offset : offset + limit]
 
     data = [
         {
             "closeTime": m[0],
             "closePrice": m[1],
             "tipo": m[2],
-            "atr": m[3],
+            "limite": m[3],
         }
         for m in sliced_movements
+    ]
+    return jsonify(data)
+
+
+# -------------------------------------------
+# 📊 Pega as confirmações de entrada (Buy/Sell) com paginação
+# -------------------------------------------
+@app.route("/api/simulate_full", methods=["GET"])
+def simulate_full():
+    """Retorna dados completos (offset/limit)"""
+    offset = int(request.args.get("offset", 0))
+    limit = int(request.args.get("limit", 100))
+    
+    candles = get_complete_data_candles_simulation(offset=offset, limit=limit)
+    
+    if not candles:
+        return jsonify([])
+    
+    data = [
+        {
+            "tempo": r[0],
+            "open": r[1],
+            "high": r[2],
+            "low": r[3],
+            "close": r[4],
+            "volume": r[5]
+        }
+        for r in candles
     ]
     return jsonify(data)
 
@@ -363,6 +394,8 @@ def get_date_simalation():
         return jsonify({"message": "Nenhum símbolo salvo"}), 404
 
 
+    
+    
 # ===============================SIMULAR FIM================================
 # ==========================================================================
 #                          Fim ativo primário
@@ -394,6 +427,33 @@ def filter_price_atr():
         return jsonify({"error": str(e)}), 500
 
 
+# -----------------------------------------------
+# Função para pegar os dados completos candle
+# -----------------------------------------------
+@app.route("/api/complete_data_candle", methods=["GET"])
+def complete_data(): 
+    try:
+        candles =  get_complete_data_candles()
+
+        if not candles:
+           return jsonify([])
+
+        data = [
+        {
+            "tempo": r[0],
+            "open": r[1],
+            "high": r[2],
+            "low": r[3],
+            "close": r[4],
+            "volume": r[5]
+        }
+        for r in candles
+        ]
+        return jsonify(data), 200
+    except Exception as e:
+        print(f"❌ Erro em get_complete_data: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+    
 # -----------------------------------------------
 # Função para retornar os pontos importantes.
 # -----------------------------------------------
@@ -554,6 +614,23 @@ def symbols_with_correlation():
     
     return jsonify(result)
 
+#================================================================
+#☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆
+#               Dados do usuário para simular 
+#☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆☆
+#================================================================
+@app.route("/api/save_backtest_results", methods=["POST"])
+def save_backtest():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Dados de simulação não enviados"}), 400
+
+    try:
+        # salvar os dados de simulação no banco de dados
+        return jsonify({"message": "Dados de simulação salvos com sucesso!"}), 200
+    except Exception as e:
+        print(f"❌ Erro ao salvar dados de simulação: {str(e)}")
+        return jsonify({"error": f"Erro ao salvar dados de simulação: {str(e)}"}), 500
 
 
 

@@ -168,7 +168,6 @@ def save_trend_clarifications(movimentos):
     conn.commit()
     conn.close()
 
-
 # Pega dados salvos para simular
 def get_trend_clarifications():
     conn = conectar()
@@ -179,7 +178,95 @@ def get_trend_clarifications():
     dados = cursor.fetchall()
     conn.close()
     return dados
+#===================================================================================
+#--------------------------------------
+# Salva os dados completos para simular ativo primário
+#--------------------------------------
+def save_complete_data(candles):
+    conn = conectar()
+    cursor = conn.cursor()
 
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS complete_data(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Tempo TEXT NOT NULL UNIQUE,
+            Abertura REAL NOT NULL,
+            Maximo REAL NOT NULL,
+            Minimo REAL NOT NULL,
+            Fechamento REAL NOT NULL,
+            volume REAL NOT NULL
+        )
+        """
+    )
+
+    # Converte dicionários para tuplas na ordem correta
+    dados = [
+        (c["tempo"], c["open"], c["high"], c["low"], c["close"], c["volume"])
+        for c in candles
+    ]
+
+    cursor.executemany("""
+    INSERT INTO complete_data
+    (Tempo, Abertura, Maximo, Minimo, Fechamento, volume)
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(Tempo) DO UPDATE SET
+    Abertura=excluded.Abertura,
+    Maximo=excluded.Maximo,
+    Minimo=excluded.Minimo,
+    Fechamento=excluded.Fechamento,
+    volume=excluded.volume
+    """, dados)
+
+    conn.commit()
+    conn.close()
+
+# Pega dados salvos compreto simular
+def get_complete_data_candles_simulation(offset=0, limit=100):
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT Tempo, Abertura, Maximo, Minimo, Fechamento, volume
+        FROM complete_data
+        ORDER BY Tempo ASC
+        LIMIT ? OFFSET ?
+        """,
+        (limit, offset)
+    )
+    dados = cursor.fetchall()
+    conn.close()
+    return dados
+# pega dados em tempo real
+def get_complete_data_candles():
+    conn = conectar()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT Tempo, Abertura, Maximo, Minimo, Fechamento, volume
+        FROM complete_data
+        ORDER BY Tempo ASC
+        """
+    )
+    dados = cursor.fetchall()
+    conn.close()
+    return dados   
+
+# apaga os dados completos
+def delete_complete_data():
+    print("🗑️ Deletando todos os registros da tabela complete_data...")
+    try:
+        conn = conectar()
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM complete_data")
+        conn.commit()
+    except Exception as e:
+        print(f"❌ Erro ao deletar complete_data: {e}")
+        raise
+    finally:
+        conn.close()
+
+#============================================================
 
 # ==============================================
 # pegar os pontos importantes classificados
@@ -780,6 +867,7 @@ def remover_symbol(symbol):
     conn.close()
 
 
+
 #PEGA OS DADOS PARA GRÁFICOS DE OBSERVAÇÂO DE MERCADO
 def get_complete_data_market_observations(symbol):
     """Retorna todos os registros (candles) do símbolo como array desserializado"""
@@ -854,7 +942,86 @@ def get_symbols_with_correlation(symbolCorrelation):
     cursor.execute(query, symbols)
 
     rows = cursor.fetchall()
-    print(">>>>",rows)
     conn.close()
     return rows
 
+# -------------------------------------------------------------------
+# Função para salvar dados de backtest no banco de dados
+# -------------------------------------------------------------------
+def save_backtest_results(symbol, backtest_data):
+    conn = conectar()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS backtest_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT,
+            time TEXT,
+            type TEXT,
+            buy REAL,
+            stop REAL,
+            average_price REAL,
+            partial_price REAL,
+            final_price REAL
+        )
+    """)
+
+    for trade in backtest_data:
+        cursor.execute("""
+            INSERT INTO backtest_results (
+                symbol,
+                time,
+                type,
+                buy,
+                stop,
+                average_price,
+                partial_price,
+                final_price
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            symbol,
+            trade.get("time"),
+            trade.get("type"),
+            trade.get("buy"),
+            trade.get("stop"),
+            trade.get("average_price"),
+            trade.get("partial_price"),
+            trade.get("final_price"),
+        ))
+
+    conn.commit()
+    conn.close()
+
+# Parciais 
+def save_backtest_partials(trade_id, partials):
+    conn = conectar()
+    cursor = conn.cursor()  
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS backtest_partials (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trade_id INTEGER,
+        partial_time TEXT,
+        partial_price REAL,
+        partial_percent REAL,
+        FOREIGN KEY (trade_id) REFERENCES backtest_trades(id)
+    );
+        """)
+    for partial in partials:
+        cursor.execute("""
+            INSERT INTO backtest_partials (
+                trade_id,
+                partial_time,
+                partial_price,
+                partial_percent
+            )
+            VALUES (?, ?, ?, ?)
+        """, (
+            trade_id,
+            partial.get("partial_time"),
+            partial.get("partial_price"),
+            partial.get("partial_percent"),
+        ))
+
+    conn.commit()
+    conn.close()
