@@ -45,7 +45,7 @@
 body.clear-theme {
   --navbar-color-active: radial-gradient(#cb63ff6e, #9b9b9b);
   --navbar-color: radial-gradient(#bca6c5ae, #bababa);
-  --background: radial-gradient(#3c214887, #181818);
+  --background: radial-gradient( #211b2669, #3a3a3a5b);
   --background-basis: #f5f5f5;
   --background-side: #211b26;
   --box-shadow: 2px 0 10px rgba(0, 0, 0, 0.5);
@@ -68,22 +68,22 @@ body.clear-theme {
 
 body.very-dark-theme {
   /* Fundo principal quase black para máximo contraste e economia de bateria */
-  --background: radial-gradient(circle at 20% 30%, #0f0815, #050505);
+  --background: radial-gradient(circle at 50% 50%, #3a1f4a, #0f0f150);
   --background-basis: #0a0a0a;
-  --background-side: #050505;
+  --background-side: #0a0a0a;
 
   /* Fontes e textos com mais brilho para legibilidade */
   --color-font: rgba(255, 255, 255, 0.92);
   --side-font: rgb(245, 245, 255);
   --white: rgb(255, 255, 255);
-  --black: #000000;
+  --black: #0000007e;
 
   /* Navbar / elementos ativos com roxo mais "cyber" e profundo */
   --navbar-color: radial-gradient(#3a1f4a, #0f0f15);
   --navbar-color-active: radial-gradient(#a050d8, #1a0d22);
 
   /* Sombras mais dramáticas e focadas */
-  --box-shadow: 0 4px 25px rgba(0, 0, 0, 0.85);
+  --box-shadow: 0 4px 25px rgba(0, 0, 0, 0.5);
   --box-shadow-active: 0 0 18px 6px rgba(160, 80, 216, 0.28);
 
   /* Botões - mais contraste */
@@ -91,7 +91,7 @@ body.very-dark-theme {
   --background-color-button-active: #2e2e2e;
 
   /* Cards e tabelas mais imersivas */
-  --background-card: #111111;
+  --background-card: #1d1d1d;
   --background-card-2: #1a1a1a;
   --background-table: #3f3f3f;
 

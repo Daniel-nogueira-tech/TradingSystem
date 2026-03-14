@@ -41,12 +41,12 @@ const SiderBarRight = () => {
                     const modo = e.target.value;
                     setRealTime(modo);
                     localStorage.setItem("realTimeMode", modo);
-                    if (modo === "realTimeMode") {
+                    if (modo === "realTimeMode" || modo === "simulation") {
                         window.location.reload();
                     }
                 }}
             >
-                <option value="simulation">Simulação</option>
+                <option value="simulation" >Simulação</option>
                 <option value="realTimeMode">Real time</option>
             </select>
             

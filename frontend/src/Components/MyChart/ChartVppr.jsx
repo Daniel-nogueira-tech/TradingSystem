@@ -29,7 +29,7 @@ ChartJS.register(
 
 
 const ChartVppr = () => {
-    const { vppr, vpprTime, vpprEma, simulationLabelDataVppr, simulationValueDataVppr, simulationValueDataVpprEma,windowSize } = useContext(AppContext);
+    const { vpprComplete, simulationLabelDataVppr, simulationValueDataVppr, simulationValueDataVpprEma, windowSize } = useContext(AppContext);
     const chartRef = useRef();
 
     /* Função para zoom*/
@@ -42,6 +42,16 @@ const ChartVppr = () => {
     const handleResetZoom = () => {
         if (chartRef.current) chartRef.current.resetZoom();
     };
+
+    const vppr = new Float64Array(vpprComplete.length);
+    const vpprEma = new Float64Array(vpprComplete.length);
+    const vpprTime = new Array(vpprComplete.length);
+
+    for (let i = 0; i < vpprComplete.length; i++) {
+        vppr[i] = vpprComplete[i].vppr;
+        vpprEma[i] = vpprComplete[i].vppr_ema;
+        vpprTime[i] = vpprComplete[i].time;
+    }
 
     const labels = vpprTime.map(time =>
         new Date(time).toLocaleString('pt-BR', {
@@ -63,8 +73,8 @@ const ChartVppr = () => {
             ? simulationLabelDataVppr
             : labels;
     }, [simulationLabelDataVppr, labels]);
-    
-    
+
+
     const activeValueVpprEma = useMemo(() => {
         return simulationValueDataVpprEma?.length > 0
             ? simulationValueDataVpprEma
@@ -76,7 +86,7 @@ const ChartVppr = () => {
     const visibleValuesVpprEma = activeValueVpprEma.slice(-windowSize);
 
     // Simula carregamento dos dados
-    const isLoading = !(visibleValuesVppr  && visibleValuesVppr.length > 0);
+    const isLoading = !(visibleValuesVppr && visibleValuesVppr.length > 0);
 
 
     const data = useMemo(() => {

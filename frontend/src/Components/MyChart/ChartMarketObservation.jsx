@@ -113,10 +113,10 @@ const ChartMarketObservation = ({ symbol }) => {
       zoom: {
         pan: {
           enabled: true,
-          mode: 'x',
+          mode: 'xy',
         },
         zoom: {
-          mode: 'x',
+          mode: 'xy',
           drag: {
             enabled: true,
             modifierKey: 'shift', 

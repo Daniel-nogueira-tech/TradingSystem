@@ -1,17 +1,26 @@
 .MyChart {
     width: 100%;
     height: 100%;
-    gap: 10px;
+    gap: 5px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     justify-content: center;
 }
 
+.container-charts-pri {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
 .search-container {
     display: flex;
     animation: fadeIns 1s;
-    margin-top: 10px;
+    margin-top: 30px;
+    margin-left: 10px;
+    position: absolute;
+    z-index: 1;
 }
 
 .MyChart-analysis {
@@ -89,12 +98,22 @@
     cursor: pointer;
 }
 
+.container-charts-pri {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+
+}
+
 /*button simulation*/
 .dateSimulation {
+    position: sticky;
+    width: 100%;
     display: flex;
+    top: 50px;
+    margin-left: 50%;
     align-items: center;
     justify-content: center;
-    width: 100%;
     gap: 10px;
 }
 
@@ -121,7 +140,7 @@
 }
 
 .dateSimulation {
-    margin-top: 10px;
+    margin-top: -50px;
 }
 
 .pi-play,
@@ -149,7 +168,7 @@
 /* toolbar */
 .draw-toolbar {
     margin-left: 3%;
-    margin-top: 4%;
+    margin-top: 7%;
 }
 
 .active-toolbar:hover {
@@ -239,9 +258,12 @@
 .thermometer-slider {
     display: flex;
     justify-items: center;
-    -webkit-appearance: none;/* Safari e Chrome */
-    -moz-appearance: none; /* Firefox */
-    appearance: none; /* Versão padrão */
+    -webkit-appearance: none;
+    /* Safari e Chrome */
+    -moz-appearance: none;
+    /* Firefox */
+    appearance: none;
+    /* Versão padrão */
     width: 100%;
     height: 25px;
     border-radius: 8px;
@@ -515,10 +537,33 @@
     top: 10%;
 }
 
+/*Gráfico de candles*/
+.chart-candle {
+    width: 1080px;
+}
 
+.chart-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 800px;
+    position: relative;
+}
 
+.chart-overlay-canvas {
+    left: 0;
+    position: absolute;
+    height: 800px;
+}
 
-
+.sidebar-xy {
+    position: absolute;
+    right: 0;
+    top: '50%';
+    transform: 'translateY(50%)';
+    height: 100vh;
+}
 
 
 
@@ -526,6 +571,27 @@
 
 
 /* Media Query para telas médias (1400px e menores) */
+@media (max-width: 1550px) {
+    .gauge-container-main {
+        gap: 50px;
+        justify-content: center;
+    }
+
+    .gauge {
+        width: 350px;
+        height: 180px;
+    }
+
+    .range-thermometer {
+        width: 350px;
+    }
+
+    .dateSimulation {
+        margin-left: 8%;
+    }
+}
+
+
 @media (max-width: 1400px) {
     .gauge-container-main {
         display: flex;
@@ -539,6 +605,10 @@
 
     .range-thermometer {
         width: 320px;
+    }
+
+    .dateSimulation {
+        margin-left: 10%;
     }
 }
 
@@ -584,6 +654,10 @@
     .p-picklist .p-picklist-header {
         width: 180px
     }
+
+    .dateSimulation {
+        margin-left: 9%;
+    }
 }
 
 /* Media Query para tablets pequenos (768px e menores) */
@@ -617,6 +691,10 @@
     .thermometer-slider {
         width: 250px;
         height: 10px;
+    }
+
+    .dateSimulation {
+        margin-left: 8%;
     }
 }
 
@@ -666,5 +744,9 @@
         max-height: 250px;
         padding: 12px;
         max-width: 100%;
+    }
+
+    .dateSimulation {
+        margin-left: 5%;
     }
 }

@@ -1,10 +1,12 @@
-import React, { createContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, use, useEffect, useRef, useState } from 'react';
 import Swal from 'sweetalert2';
 import axios from 'axios';
 import { Toast } from 'primereact/toast';
+import { BsRobot } from "react-icons/bs";
 import { ProgressSpinner } from 'primereact/progressspinner';
 import 'primereact/resources/themes/lara-dark-indigo/theme.css';
 import 'primereact/resources/primereact.min.css';
+import { useMemo } from 'react';
 
 
 
@@ -16,19 +18,36 @@ const ContextApi = (props) => {
   const url = "http://localhost:5000";
   const [theme, setTheme] = useState(() => { return localStorage.getItem('theme') || 'dark'; });
   const [windowSize, setWindowSize] = useState(1000);
-  const [values, setValues] = useState([]);
-  const [labels, setLabels] = useState([]);
-  const [atr, setAtr] = useState([]);
+  const [atr, setAtr] = useState([]);// usado na regra de cores no Chart.jsx
   const [dadosPrice, setDadosPrice] = useState([]); // DADOS completos do ativo primária (open, close, high, low, volume, etc)
+  const [vpprComplete, setVpprComplete] = useState([]); // Dados completos do VPPR (valor, ema, etc) para análise detalhada
+  const [rsiComplete, setRsiComplete] = useState([]); // Dados completos do RSI (valor, amrsi, rsi_ma) para análise detalhada
+  const [candlesComplete, setCandlesComplete] = useState([]) // Dados completos com candles
   const inputRefMain = useRef(null);
-  const [symbol, setSymbol] = useState("");
+  const [symbol, setSymbol] = useState(() => {
+    return localStorage.getItem('symbol') || "";
+  });
+  useEffect(() => {
+    if (symbol) {
+      localStorage.setItem('symbol', symbol);
+    }
+  }, [symbol]);
   const toast = useRef(null);
-  const [activeButton, setActiveButton] = useState('');
+  const [activeButton, setActiveButton] = useState('1h');
   const [importantPoints, setImportantPoints] = useState([]);
   const [selectedPivots, setSelectedPivots] = useState([]);
   const [realTime, setRealTime] = useState(() => {
     return localStorage.getItem("realTimeMode") || "simulation";
   });
+  const [timeCurrent, setTimeCurrent] = useState(() => {
+    return localStorage.getItem('timeCurrent') || "";
+  });
+  // whenever timeCurrent is updated, persist locally
+  useEffect(() => {
+    if (timeCurrent) {
+      localStorage.setItem('timeCurrent', timeCurrent);
+    }
+  }, [timeCurrent]);
   const modo = realTime;
   const [rsi, setRsi] = useState([]);
   const [rsiTime, setRsiTime] = useState([]);
@@ -42,6 +61,37 @@ const ContextApi = (props) => {
   const [downloadedData, setDownloadedData] = useState(false);
   const [dataCorrelation, setDataCorrelation] = useState([])
   const [assetCorrelationData, setAssetCorrelationData] = useState([]);
+
+  const timeoutRef = useRef(null);
+
+  // Variáveis para controle incremental dos dados (Gráficos)
+  const fullDataRef = useRef([]);
+  const indexRef = useRef(0);
+  const intervalRef = useRef(null);
+
+  // Variáveis para controle incremental dos dados do VPPR (Indicador)
+  const fullDataVpprRef = useRef([]);
+  const indexVpprRef = useRef(0);
+  const intervalVpprRef = useRef(null);
+
+  // Variáveis para controle incremental dos dados do RSI (Indicador)
+  const fullDataRsiRef = useRef([]);
+  const indexRsiRef = useRef(0);
+  const intervalRsiRef = useRef(null);
+  const timeoutRsiRef = useRef(null); // usada no novo motor recursivo
+
+  // Variáveis para controle incremental dos dados do VPPR (Indicador)
+  const fullDataCandlesRef = useRef([]);
+  const indexCandlesRef = useRef(0);
+  const intervalCandlesRef = useRef(null);
+
+
+
+  // Delta-tracking refs para evitar reprocessar dados históricos em modo real-time
+  const lastProcessedTimestampRef = useRef(null); // para price
+  const lastProcessedTimestampRsiRef = useRef(null); // para RSI
+  const lastProcessedTimestampVpprRef = useRef(null); // para VPPR
+  const lastProcessedTimestampCandlesRef = useRef(null); // para candles
 
   // Global loading (reference-counted) — use para mostrar um único loading enquanto múltiplos fetches ocorrem
   const [globalLoadingCount, setGlobalLoadingCount] = useState(0);
@@ -79,6 +129,12 @@ const ContextApi = (props) => {
   const [simulationValueDataComplete, setSimulationValueDataComplete] = useState([]);
   const [simulationValueDataCompleteRsi, setSimulationValueDataCompleteRsi] = useState([]);
   const [simulationValueDataCompleteVppr, setSimulationValueDataCompleteVppr] = useState([]);
+
+  // Estados para armazenar confirmações de compra e venda
+  const [simulationCandleComplete, setSimulationCandleComplete] = useState([]);
+  const [simulationCandleValue, setSimulationCandleValue] = useState([]);
+  const [simulationCandleLabel, setSimulationCandleLabel] = useState([]);
+
   /**----------------------------------------//--------------------------------------------------- 
    * //////////////////////////////////////////////////////////////////////////////////////////
    * ----------------------------------------//---------------------------------------------------*/
@@ -99,6 +155,10 @@ const ContextApi = (props) => {
   const simulationVpprTimeoutRef = useRef(null);
   const [isPausedVppr, setIsPausedVppr] = useState(false);
   const isPausedVpprRef = useRef(isPausedVppr);
+
+  const simulationCandleTimeoutRef = useRef(null);
+  const [isPausedCandle, setIspausedCandle] = useState(false);
+  const isPausedCandleRef = useRef(isPausedCandle);
   /**-----------------------//-------------------------
    * /////////////////////////////////////////////////
    *------------------------//-------------------------*/
@@ -109,10 +169,13 @@ const ContextApi = (props) => {
   const offsetRefPrimary = useRef(0);
   const offsetRefRsi = useRef(0);
   const offsetRefVppr = useRef(0);
+  const offsetRefCandle = useRef(0);
   const period = 14; /* periodo do AMRSI */
 
   // Variável de referência para usar no toast
   const toastShownRef = useRef(false);
+
+  const checkEndOfIncrement = useRef(false);
 
 
 
@@ -125,6 +188,7 @@ const ContextApi = (props) => {
       await graphicDataOne(savedSymbol);
       await getRsi(savedSymbol);
       await getVppr(savedSymbol);
+      await graphicCandles();
 
       if (!toastShownRef.current) {
         toast.current.show({
@@ -138,7 +202,8 @@ const ContextApi = (props) => {
     }
     else if (realTime === "simulation") {
       await getRsi();
-      await getVppr()
+      await getVppr();
+      await graphicCandles();
       await simulateStepSync(savedSymbol);
       toast.current.show({
         severity: "success",
@@ -151,10 +216,259 @@ const ContextApi = (props) => {
       console.warn("Modo inválido:", realTime);
     }
   };
-  /** --------------------------------//-----------------------------------
-   * ////////////////////////////////////////////////////////////////////
-   -----------------------------------//----------------------------------*/
 
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------///
+  /*#####################################################################
+                         1️⃣📈INICIO ATIVO PRIMÁRIA CANDLE📈1️⃣
+  ########################################################################*/
+
+  // Função principal modificada
+  const processingCandlesRef = useRef();
+  const binanceWsRef = useRef(null);
+
+  // Função principal modificada
+  const graphicCandles = async () => {
+    if (modo === "simulation") return;
+
+    // Cancela processamento anterior
+    if (processingCandlesRef.current) {
+      cancelAnimationFrame(processingCandlesRef.current);
+      processingCandlesRef.current = null;
+    }
+
+    // Fecha WebSocket existente se houver
+    if (binanceWsRef.current) {
+      binanceWsRef.current.close();
+      binanceWsRef.current = null;
+    }
+
+    try {
+      // 1. CARREGA DADOS HISTÓRICOS DA API
+      const response = await axios.get(`${url}/api/complete_data_candle`);
+      const historicalData = response.data;
+
+      if (!Array.isArray(historicalData)) return;
+
+      // Processa e ordena os dados históricos
+      const sortedHistoricalData = processHistoricalData(historicalData);
+
+      // Armazena no ref e atualiza o estado
+      fullDataCandlesRef.current = sortedHistoricalData;
+
+      if (modo === "realTimeMode") {
+        setCandlesComplete(sortedHistoricalData);
+      } else {
+        setCandlesComplete([]);
+        resetBuffer();
+        return;
+      }
+
+      // 2. INICIA CONEXÃO WEBSOCKET COM BINANCE
+      setupBinanceWebSocket(sortedHistoricalData);
+
+    } catch (error) {
+      console.error("❌ Erro ao buscar dados:", error);
+    }
+  };
+
+  // Função para processar dados históricos
+  const processHistoricalData = (data) => {
+    const len = data.length;
+    const timestamps = new Uint32Array(len);
+
+    // Processa em chunks
+    const CHUNK_SIZE = 5000;
+    for (let i = 0; i < len; i += CHUNK_SIZE) {
+      const end = Math.min(i + CHUNK_SIZE, len);
+      setTimeout(() => { }, 0);
+
+      for (let j = i; j < end; j++) {
+        const candle = data[j];
+        // Verifica se já está no formato correto
+        timestamps[j] = new Date(candle.tempo.replace(' ', 'T')).getTime() / 1000;
+      }
+    }
+
+    // Ordenação
+    const indices = new Uint32Array(len);
+    for (let i = 0; i < len; i++) indices[i] = i;
+    indices.sort((a, b) => timestamps[a] - timestamps[b]);
+
+    // Reconstrói array ordenado (já deve estar com open, high, low, close)
+    const sorted = new Array(len);
+    for (let i = 0; i < len; i++) {
+      sorted[i] = data[indices[i]];
+    }
+
+    return sorted;
+  };
+
+
+  // Configuração do WebSocket da Binance
+  const setupBinanceWebSocket = (historicalData) => {
+    // Parâmetros do WebSocket 
+    if (!symbol || !timeCurrent) {
+      console.error("❌ symbol ou timeCurrent não definidos");
+      return;
+    }
+
+    // Binance exige símbolo em minúsculas
+    const tradingSymbol = symbol.toLowerCase();
+    const interval = timeCurrent;
+
+
+    const wsUrl = `wss://stream.binance.com:9443/ws/${tradingSymbol}@kline_${interval}`;
+
+    binanceWsRef.current = new WebSocket(wsUrl);
+
+    binanceWsRef.current.onopen = () => {
+      console.log('✅ WebSocket Binance conectado para', tradingSymbol, interval);
+    };
+
+    binanceWsRef.current.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        // Processa o candle recebido para o SEU formato
+        const newCandle = processBinanceCandle(message);
+
+        // Atualiza os dados com o novo candle
+        updateCandlesWithRealTimeData(newCandle);
+
+      } catch (error) {
+        console.error('❌ Erro ao processar mensagem WebSocket:', error);
+      }
+    };
+
+    binanceWsRef.current.onerror = (error) => {
+      console.error('❌ Erro no WebSocket:', error);
+    };
+
+    binanceWsRef.current.onclose = () => {
+      console.log('🔌 WebSocket desconectado');
+
+      // Tenta reconectar após 5 segundos
+      setTimeout(() => {
+        if (modo === "realTimeMode" && fullDataCandlesRef.current) {
+          console.log('🔄 Tentando reconectar WebSocket...');
+          setupBinanceWebSocket(fullDataCandlesRef.current);
+        }
+      }, 5000);
+    };
+  };
+
+  // Processa o candle da Binance para o SEU formato - CORRIGIDO
+  const processBinanceCandle = (message) => {
+    const k = message.k;
+
+    // Formata a data
+    const date = new Date(k.t);
+    const formattedTime = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}:00`;
+
+    // Retorna com os nomes CORRETOS (open, high, low, close)
+    return {
+      tempo: formattedTime,
+      open: parseFloat(k.o) || 0,
+      high: parseFloat(k.h) || 0,
+      low: parseFloat(k.l) || 0,
+      close: parseFloat(k.c) || 0,
+      volume: parseFloat(k.v) || 0
+    };
+  };
+
+  // Atualiza os candles com dados em tempo real - CORRIGIDO
+  const updateCandlesWithRealTimeData = (newCandle) => {
+    if (!fullDataCandlesRef.current || fullDataCandlesRef.current.length === 0) {
+      console.log('⚠️ Nenhum dado histórico disponível');
+      return;
+    }
+
+    // Pega o último candle do array histórico
+    const currentData = fullDataCandlesRef.current;
+    const lastHistoricalCandle = currentData[currentData.length - 1];
+
+
+    // Se for o mesmo minuto, ATUALIZA o último candle
+    if (newCandle.tempo === lastHistoricalCandle.tempo) {
+
+      // IMPORTANTE: Preserva a abertura (open) original do histórico!
+      const openOriginal = lastHistoricalCandle.open;
+
+      // Garante que estamos trabalhando com números
+      const currentHigh = Number(lastHistoricalCandle.high) || 0;
+      const currentLow = Number(lastHistoricalCandle.low) || 0;
+      const newHigh = Number(newCandle.high) || 0;
+      const newLow = Number(newCandle.low) || 0;
+      const newClose = Number(newCandle.close) || 0;
+      const newVolume = Number(newCandle.volume) || 0;
+
+      // Calcula nova máxima e mínima
+      const highAtualizada = Math.max(currentHigh, newHigh, newClose);
+      const lowAtualizada = Math.min(currentLow, newLow, newClose);
+
+      // Cria um novo array com o último candle atualizado
+      const updatedData = [...currentData];
+      updatedData[updatedData.length - 1] = {
+        tempo: lastHistoricalCandle.tempo,
+        open: openOriginal,           // ← MANTÉM o nome 'open'
+        high: highAtualizada,          // ← MANTÉM o nome 'high'
+        low: lowAtualizada,            // ← MANTÉM o nome 'low'
+        close: newClose,               // ← MANTÉM o nome 'close'
+        volume: newVolume               // ← MANTÉM o nome 'volume'
+      };
+
+      // Atualiza o ref e o estado
+      fullDataCandlesRef.current = updatedData;
+      setCandlesComplete(updatedData);
+    }
+    // Se for um minuto novo, ADICIONA ao final
+    else if (newCandle.tempo > lastHistoricalCandle.tempo) {
+
+      // Garante que o novo candle use os nomes corretos (open, high, low, close)
+      const novoCandleFormatado = {
+        tempo: newCandle.tempo,
+        open: Number(newCandle.open) || 0,
+        high: Number(newCandle.high) || 0,
+        low: Number(newCandle.low) || 0,
+        close: Number(newCandle.close) || 0,
+        volume: Number(newCandle.volume) || 0
+      };
+
+      const updatedData = [...currentData, novoCandleFormatado];
+      fullDataCandlesRef.current = updatedData;
+      setCandlesComplete(updatedData);
+    }
+    else {
+      console.log('⏭️ Ignorando candle antigo:', newCandle.tempo);
+    }
+  };
+  // Limpeza na saída do componente
+  useEffect(() => {
+    return () => {
+      if (binanceWsRef.current) {
+        binanceWsRef.current.close();
+      }
+    };
+  }, []);
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------///
+
+  /*#### #################################################################
+                                ///////////
+  ########################################################################*/
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------///
 
   /*#####################################################################
                          1️⃣📈INICIO ATIVO PRIMÁRIA📈1️⃣
@@ -162,42 +476,246 @@ const ContextApi = (props) => {
   /*------------------------------------------------------------------
               1️⃣ Função para buscar dados do ativo Primária
    -------------------------------------------------------------------*/
+  // Use uma estrutura de buffer circular em vez de array dinâmico
+  const MAX_CANDLES_ONE = 2000;
+  const BufferOneRef = useRef(new Array(MAX_CANDLES_ONE));
+  const bufferStartOneRef = useRef(0);
+  const bufferLengthOneRef = useRef(0);
+  const processingRef = useRef(false);
+
+  // Função para adicionar candle ao buffer
+  const addToBufferOne = (candle) => {
+    const buffer = BufferOneRef.current;
+    const pos = (bufferStartOneRef.current + bufferLengthOneRef.current) % MAX_CANDLES_ONE;
+    buffer[pos] = candle;
+
+    if (bufferLengthOneRef.current === MAX_CANDLES_ONE) {
+      bufferStartOneRef.current = (bufferStartOneRef.current + 1) % MAX_CANDLES_ONE;
+    } else {
+      bufferLengthOneRef.current++;
+    }
+  };
+
+  // Função para adicionar múltiplos candles ao buffer
+  const addBatchToBufferOne = (candles) => {
+    candles.forEach(candle => addToBufferOne(candle));
+  };
+
+  // Função para obter array atual
+  const getCurrentOne = () => {
+    const result = [];
+    const buffer = BufferOneRef.current;
+    for (let i = 0; i < bufferLengthOneRef.current; i++) {
+      result.push(buffer[(bufferStartOneRef.current + i) % MAX_CANDLES_ONE]);
+    }
+    return result;
+  };
+
   const graphicDataOne = async (symbol) => {
-    if (!symbol) return;
-    // 🧹 Limpa dados da simulação
+    if (!symbol || modo === "simulation") return;
+
     clearTimeout(simulationTimeoutRef.current);
-    startGlobalLoading();
+
     try {
       const response = await axios.get(`${url}/api/filter_price_atr?symbol=${symbol}`);
       const data = response.data;
+
+
       if (!Array.isArray(data) || data.length === 0) return;
+
       const len = data.length;
+      const CHUNK_SIZE = 5000;
 
-      // Pré-alocação (rápido e cache-friendly)
-      const prices = new Float64Array(len);
-      const labelsArr = new Array(len);
+      // Pré-alocação
+      const timestamps = new Uint32Array(len);
 
-      for (let i = 0; i < len; i++) {
-        const candle = data[i];
-        prices[i] = Number(candle.closePrice);
-        labelsArr[i] = candle.closeTime;
+      // Processamento em chunks
+      for (let i = 0; i < len; i += CHUNK_SIZE) {
+        const end = Math.min(i + CHUNK_SIZE, len);
+
+        // Permite que a UI atualize entre chunks
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        // Processa apenas o chunk atual
+        for (let j = i; j < end; j++) {
+          const candle = data[j];
+          timestamps[j] = new Date(candle.closeTime.replace(' ', 'T')).getTime();
+        }
       }
+
       const atrLast = Number(data[len - 1].limite);
-      // 🔥 commits de estado
-      setValues(prices);
-      setLabels(labelsArr);
+
+      // Atualiza estados
       setAtr(atrLast);
-      setDadosPrice(data);
+
+      // Guarda dados ordenados
+      fullDataRef.current = data;
+
+      // Reseta o buffer
+      bufferStartOneRef.current = 0;
+      bufferLengthOneRef.current = 0;
+      indexRef.current = 0;
+
+      if (modo !== "realTimeMode") {
+        setDadosPrice([]);
+      } else {
+        setDadosPrice(getCurrentOne())
+      }
 
     } catch (error) {
       console.error("❌ Erro ao buscar dados:", error);
     } finally {
-      stopGlobalLoading();
+      startIncrementalFeed(10);
     }
   };
-  /**-------------------------------//---------------------------------
-   *  //////////////////////////////////////////////////////////////
-   ---------------------------------//---------------------------------*/
+
+  // Motor incremental otimizado
+  const startIncrementalFeed = (speed = 1) => {
+    if (modo === 'simulation' || processingRef.current) return;
+
+    try {
+      // Limpa intervalo anterior se existir
+      if (intervalRef.current?.clear) {
+        intervalRef.current.clear();
+      }
+
+      processingRef.current = true;
+
+      // Delta-tracking otimizado com busca binária
+      if (modo === "realTimeMode" && lastProcessedTimestampRef.current) {
+        const lastTs = new Date(lastProcessedTimestampRef.current).getTime();
+        const data = fullDataRef.current;
+
+        // ✅ Busca binária (mais rápida que findIndex)
+        let left = 0;
+        let right = data.length - 1;
+
+        while (left <= right) {
+          const mid = Math.floor((left + right) / 2);
+          const midTs = new Date(data[mid].closeTime).getTime();
+
+          if (midTs <= lastTs) {
+            left = mid + 1;
+          } else {
+            right = mid - 1;
+          }
+        }
+
+        indexRef.current = left;
+
+        if (indexRef.current >= data.length) {
+          console.log("✅ Nenhum dado novo para processar");
+          processingRef.current = false;
+          return;
+        }
+
+        console.log(`🚀 Delta-tracking: pulando para índice ${indexRef.current}`);
+      } else {
+        indexRef.current = 0;
+      }
+
+      // Processa em batches
+      const BATCH_SIZE = Math.max(1, Math.floor(speed)); // Garante que seja pelo menos 1
+      let frameId;
+
+      const processBatch = () => {
+        if (indexRef.current >= fullDataRef.current.length) {
+          // Final do processamento
+          if (fullDataRef.current.length > 0) {
+            lastProcessedTimestampRef.current =
+              fullDataRef.current[fullDataRef.current.length - 1].closeTime;
+            console.log("💾 Último timestamp processado:", lastProcessedTimestampRef.current);
+          }
+          console.log("✅ Fim da análise incremental");
+          processingRef.current = false;
+          return;
+        }
+
+        // Processa um lote
+        const endIdx = Math.min(
+          indexRef.current + BATCH_SIZE,
+          fullDataRef.current.length
+        );
+
+        // ✅ CORRIGIDO: Adiciona lote ao buffer
+        for (let i = indexRef.current; i < endIdx; i++) {
+          addToBufferOne(fullDataRef.current[i]);
+        }
+
+        // ✅ CORRIGIDO: Atualiza estado com função e parênteses
+        setDadosPrice(getCurrentOne());
+
+        // ✅ CORRIGIDO: Atualiza índice corretamente
+        indexRef.current = endIdx;
+
+        // Agenda próximo lote
+        if (indexRef.current < fullDataRef.current.length) {
+          frameId = requestAnimationFrame(processBatch);
+        } else {
+          processingRef.current = false;
+        }
+      };
+
+      // Inicia processamento
+      frameId = requestAnimationFrame(processBatch);
+
+      // Cleanup
+      intervalRef.current = {
+        current: frameId,
+        clear: () => {
+          if (frameId) {
+            cancelAnimationFrame(frameId);
+          }
+          processingRef.current = false;
+        }
+      };
+
+    } catch (error) {
+      console.error("Erro no feed incremental:", error);
+      processingRef.current = false;
+    }
+  };
+
+  // Worker (opcional, se precisar)
+  const workerOneRef = useRef(null);
+
+  useEffect(() => {
+    // Só cria worker se suportado e se ainda não existe
+    if (window.Worker && !workerOneRef.current) {
+      try {
+        workerOneRef.current = new Worker('/candleWorkerOne.js');
+        workerOneRef.current.onmessage = (e) => {
+          const { type, data, lastTimestamp } = e.data;
+
+          if (type === 'newData' && data?.length > 0) {
+            requestAnimationFrame(() => {
+              addBatchToBufferOne(data);
+              setDadosPrice(getCurrentOne());
+              if (lastTimestamp) {
+                lastProcessedTimestampRef.current = lastTimestamp;
+              }
+            });
+          }
+        };
+      } catch (error) {
+        console.error("Erro ao criar worker:", error);
+      }
+    }
+
+    return () => {
+      if (workerOneRef.current) {
+        workerOneRef.current.terminate();
+        workerOneRef.current = null;
+      }
+    };
+  }, []);
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------///
+
   /*--------------------------------------------------------------------
     🔍1️⃣ Faz pequisa do simbolo envia para backend (do ativo primária)
     --------------------------------------------------------------------*/
@@ -210,13 +728,20 @@ const ContextApi = (props) => {
     try {
       const response = await axios.get(`${url}/api/filter_price_atr?symbol=${searchedSymbol}`);
       const data = response.data;
-      const prices = data.map(p => parseFloat(p.closePrice));
-      const time = data.map(p => p.closeTime);
 
-      setLabels(time);
-      setValues(prices);
-      setDadosPrice(data);
+      // 🔥 ORDENA os dados também em handleSearch
+      const sortedData = [...data].sort((a, b) => {
+        const timeA = new Date(a.closeTime.replace(" ", "T")).getTime();
+        const timeB = new Date(b.closeTime.replace(" ", "T")).getTime();
+        return timeA - timeB;
+      });
+
+      const prices = sortedData.map(p => parseFloat(p.closePrice));
+      const time = sortedData.map(p => p.closeTime);
+
+      setDadosPrice(sortedData);
       setSymbol(searchedSymbol);
+      timeframeToMs()
 
       // ✅ Toast de sucesso
       toast.current.show({
@@ -245,14 +770,24 @@ const ContextApi = (props) => {
                     🔍1️⃣ Busca o simbolo Primária
    --------------------------------------------------------------------*/
   const getSymbol = async () => {
+    // Try backend first
     try {
-      const response = await axios.get(url + "/api/last_symbol")
+      const response = await axios.get(url + "/api/last_symbol");
       const data = response.data;
-      setSymbol(data.symbol);
-      return data.symbol;
+      if (data && data.symbol) {
+        setSymbol(data.symbol);
+        return data.symbol;
+      }
     } catch (error) {
       console.error("Erro na API para recuperar símbolos:", error);
     }
+    // fallback to localStorage if available
+    const stored = localStorage.getItem('symbol');
+    if (stored) {
+      setSymbol(stored);
+      return stored;
+    }
+    return null;
   };
   /**-------------------------------//---------------------------------
    * ////////////////////////////////////////////////////////////////
@@ -314,6 +849,8 @@ const ContextApi = (props) => {
       const epPrimary = `${url}/api/simulate_price_atr`;
       const epRsi = `${url}/api/simulate_amrsi`;
       const epVppr = `${url}/api/simulate_vppr`;
+      const epDadosCandles = `${url}/api/simulate_full`;
+
 
       // pausa global do primary
       if (isPausedRef.current) {
@@ -348,6 +885,54 @@ const ContextApi = (props) => {
       });
 
       offsetRefPrimary.current += 1;
+
+      // 🔹 Confirmações sincronizadas ao primary (processa até tp)
+      // durante o processamento das confirmações iremos atualizar os estados imediatamente,
+      // não acumularemos arrays locais. Isso garante que simulationCandleComplete cresça de
+      while (true) {
+        if (isPausedCandleRef.current) {
+          console.log("⏸️ Pausado durante processamento das confirmações. Retomando depois...");
+          // re-agenda a simulação e sai; não mexemos nos dados adicionais
+          simulationTimeoutSyncRef.current = setTimeout(
+            () => simulateStepSync(symbolPrimary),
+            300
+          );
+          return;
+        }
+
+        // busca próxima confirmação pelo offset atual
+        let candles = await fetchOne(epDadosCandles, offsetRefCandle.current);
+
+        if (!candles) {
+          break; // não há mais confirmações para esta iteração
+        }
+
+        // o valor de tempo vem no campo 'tempo' (texto ou timestamp);
+        // comparar usando essa data para saber se devemos processar
+        const dateConf = candles.tempo;
+        const tConf = new Date(dateConf).getTime();
+        if (tConf > tp) {
+          break; // confirmação adiantada, interrompe o loop
+        }
+
+        // atualiza os três estados de uma vez como nos outros dados
+        setSimulationCandleValue(prev => {
+          const next = [...prev, parseFloat(candles.close)];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+        setSimulationCandleLabel(prev => {
+          const next = [...prev, candles.tempo];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+        setSimulationCandleComplete(prev => {
+          const next = [...prev, candles];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
+
+        offsetRefCandle.current += 1;
+      }
+      // Não é necessário aplicar um batch final – já inserimos cada candle dentro do loop.
+
 
       // 🔹 RSI sincronizado ao primary (fetch em batch, processa até tp)
       const rsiBatchValues = [];
@@ -519,7 +1104,7 @@ const ContextApi = (props) => {
         });
       }
 
-      // agenda próxima iteração (próximo Vppr + catch-up)
+      // agenda próxima iteração
       simulationTimeoutSyncRef.current = setTimeout(() => {
         simulateStepSync(symbolPrimary);
       }, 300);
@@ -534,10 +1119,12 @@ const ContextApi = (props) => {
       }
     }
   };
+
+
+
   /**-------------------------------//-----------------------------------------
    * ////////////////////////////////////////////////////////////////////////
    ---------------------------------//-----------------------------------------*/
-
   /*-----------------------------------------------------------------------
     1️⃣ Função para (BAIXAR) dados simulação (envia as datas para o backend)
    -------------------------------------------------------------------------*/
@@ -613,6 +1200,9 @@ const ContextApi = (props) => {
   ----------------------------------------------------------------------------------------------*/
   const handleClickTime = async (time) => {
     if (!time) return;
+    // pega o tempo gráfico atualizado para garantir sincronia
+    clearTimeout(timeoutRef.current);
+    clearInterval(intervalRef.current);
     const result = await Swal.fire({
       title: 'Você quer mesmo alterar?',
       text: "O time frame será mudado!",
@@ -635,6 +1225,7 @@ const ContextApi = (props) => {
           time: time
         });
         const data = response.data;
+        setTimeCurrent(data.time);
         setActiveButton(data.time);
         handleGetPoints();
         graphicDataOne(symbol);
@@ -659,11 +1250,18 @@ const ContextApi = (props) => {
           const successful = res.data.updated_symbols.filter(u => u.status === 'atualizado').length;
           console.log(`✅ ${successful} observações de mercado atualizadas após adicionar novo símbolo`);
         }
+
       } catch (error) {
         Swal.fire({
           title: "Erro!",
           text: "Não foi possível atualizar o timeframe.",
-          icon: "error"
+          icon: "error",
+          customClass: {
+            popup: 'fundo-preto',
+            title: 'titulo-branco',
+            content: 'texto-branco',
+            confirmButton: 'botao-verde',
+          }
         });
         console.error("Erro ao enviar timeframe:", error);
       }
@@ -740,11 +1338,42 @@ const ContextApi = (props) => {
   /*---------------------------------------------------------------------------
                     Função para pegar dados do calculo rsi
   ------------------------------------------------------------------------------*/
+  // Use uma estrutura de buffer circular em vez de array dinâmico
+  const MAX_CANDLES_RSI = 2000;
+  const rsiBufferRef = useRef(new Array(MAX_CANDLES_RSI));
+  const bufferStartRsiRef = useRef(0);
+  const bufferLengthRsiRef = useRef(0);
+
+  // Função para adicionar candle ao buffer
+  const addRsiToBuffer = (candle) => {
+    const buffer = rsiBufferRef.current;
+    const pos = (bufferStartRsiRef.current + bufferLengthRsiRef.current) % MAX_CANDLES_RSI;
+
+    buffer[pos] = candle;
+
+    if (bufferLengthRsiRef.current === MAX_CANDLES_RSI) {
+      bufferStartRsiRef.current = (bufferStartRsiRef.current + 1) % MAX_CANDLES_RSI;
+    } else {
+      bufferLengthRsiRef.current++;
+    }
+  };
+
+  // Função para obter array atual (chamada apenas quando necessário)
+  const getCurrentRsi = () => {
+    const result = [];
+    const buffer = rsiBufferRef.current;
+    for (let i = 0; i < bufferLengthRsiRef.current; i++) {
+      result.push(buffer[(bufferStartRsiRef.current + i) % MAX_CANDLES_RSI]);
+    }
+    return result;
+  };
+
+  //-----------------------------------------------------------------------//
   const getRsi = async (symbol) => {
     if (!symbol || !modo || !period) {
       return;
     };
-    startGlobalLoading();
+
     try {
       const response = await axios.get(
         `${url}/api/rsi?period=${period}&symbol=${symbol}&modo=${modo}`
@@ -754,60 +1383,323 @@ const ContextApi = (props) => {
         console.warn("Dados do RSI não são um array:", data);
         return;
       }
+      const len = data.length;
+      // Pré-alocação (rápido e cache-friendly)
+      let value = new Float64Array(len);
+      let timestamps = new Uint32Array(len);
 
-      const value = data.map(p => parseFloat(p.rsi_ma));
-      const time = data.map(p => p.time.split(' '));
-      setRsi([...value])
-      setRsiTime([...time])
+      // Processa em chunks para não travar a UI
+      const CHUNK_SIZE = 5000;
+      for (let i = 0; i < len; i += CHUNK_SIZE) {
+        const end = Math.min(i + CHUNK_SIZE, len);
+
+        // Permite que a UI atualize entre chunks
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        for (let j = i; j < end; j++) {
+          const candle = data[j];
+          value[j] = Number(candle.rsi_ma);
+          timestamps[j] = new Date(candle.time.replace(' ', 'T')).getTime();
+        }
+      };
+
+      setRsi(Array.from(value));
+      setRsiTime(timestamps);
+
+      fullDataRsiRef.current = data;
+      indexRsiRef.current = 0;
+
+      // Reseta buffer   
+      bufferLengthRsiRef.current = 0;
+      bufferStartRsiRef.current = 0;
+
+      // Em modo realTimeMode, NÃO limpa dados anteriores (mantém histórico)
+      // Em modo simulação, limpa para começar do zero
+      if (modo !== "realTimeMode") {
+        setRsiComplete([]);
+      } else {
+        // Em realTimeMode, mantém o buffer atual
+        setRsiComplete(getCurrentRsi());
+      }
+
     } catch (error) {
       console.error("Erro ao buscar dados do RSI", error);
     } finally {
-      stopGlobalLoading();
+      startIncrementalFeedRsi() // velocidade maior para evitar acúmulo de updates
     }
   };
-  /**---------------------------------------------------------------------
-   * /////////////////////////////////////////////////////////////////////
-   -----------------------------------------------------------------------*/
+  //-------------------------------------------------------------------------------------------------//
+  // Motor incremental para alimentar os gráficos gradualmente, evitando travamentos e permitindo simulação fluida
+  const startIncrementalFeedRsi = (speed = 5) => {
+    if (modo === 'simulation') return; // incremental feed é apenas para real-time, simulação tem motor próprio
+    // cancela qualquer execução anterior
+    clearTimeout(timeoutRsiRef.current);
+
+    if (intervalRsiRef.current?.clear) {
+      intervalRsiRef.current.clear();
+      intervalRsiRef.current = null;
+    }
+
+    // ⚡ Delta-tracking: se já processamos dados antes, pule os dados antigos
+    if (modo === "realTimeMode" && lastProcessedTimestampRsiRef.current) {
+      const lastTs = new Date(lastProcessedTimestampRsiRef.current).getTime();
+
+      const startIdx = fullDataRsiRef.current.findIndex(
+        candle => new Date(candle.time).getTime() > lastTs
+      );
+      if (startIdx === -1) {
+        return;
+      }
+      indexRsiRef.current = startIdx;
+      console.log(`🚀 Delta-tracking (RSI): pulando para índice ${startIdx}, processando apenas dados novos.`);
+    } else {
+      indexRsiRef.current = 0;
+    }
+
+    // Processa em batches para reduzir renders
+    const BATCH_SIZE = speed;
+    let frameId;
+
+    const processBatch = () => {
+      if (indexRsiRef.current >= fullDataRsiRef.current.length) {
+        // 💾 Salva o último timestamp processado para próxima iteração
+        if (fullDataRsiRef.current.length > 0) {
+          lastProcessedTimestampRsiRef.current = fullDataRsiRef.current[fullDataRsiRef.current.length - 1].time;
+          console.log("💾 Último timestamp processado (RSI):", lastProcessedTimestampRsiRef.current);
+        }
+        checkEndOfIncrement.current = true;
+        console.log("checkEndOfIncrement", checkEndOfIncrement.current);
+
+        console.log("✅ Fim da analise incremental: todos os dados foram processados.");
+        return;
+      }
+
+      // Processa um lote de candles
+      const endIdx = Math.min(
+        indexRsiRef.current + BATCH_SIZE,
+        fullDataRsiRef.current.length
+      );
+
+      // Adiciona todos ao buffer
+      for (let i = indexRsiRef.current; i < endIdx; i++) {
+        addRsiToBuffer(fullDataRsiRef.current[i]);
+      }
+
+      // Única atualização de estado para o lote
+      setRsiComplete(getCurrentRsi());
+
+
+      indexRsiRef.current = endIdx;
+
+      // Agenda próximo lote
+      if (indexRsiRef.current < fullDataRsiRef.current.length) {
+        frameId = requestAnimationFrame(processBatch);
+      }
+    };
+    // Inicia processamento
+    frameId = requestAnimationFrame(processBatch);
+
+    // Cleanup
+    intervalRsiRef.current = {
+      current: frameId,
+      clear: () => cancelAnimationFrame(frameId)
+    };
+  };
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------//
+
+  // --------------------------------////------------------------------------------///
+
   /*--------------------------------------------------------------------------
    * Função para pegar dados do calculo  vppr (Volume Price Pressure Ratio) 
    ---------------------------------------------------------------------------*/
-  let controller;
+  // Use uma estrutura de buffer circular em vez de array dinâmico
+  const MAX_CANDLES = 2000;
+  const vpprBufferRef = useRef(new Array(MAX_CANDLES));
+  const bufferStartVpprRef = useRef(0);
+  const bufferLengthVpprRef = useRef(0);
+
+  // Função para adicionar candle ao buffer
+  const addVpprToBuffer = (candle) => {
+    const buffer = vpprBufferRef.current;
+    const pos = (bufferStartVpprRef.current + bufferLengthVpprRef.current) % MAX_CANDLES;
+
+    buffer[pos] = candle;
+
+    if (bufferLengthVpprRef.current === MAX_CANDLES) {
+      bufferStartVpprRef.current = (bufferStartVpprRef.current + 1) % MAX_CANDLES;
+    } else {
+      bufferLengthVpprRef.current++;
+    }
+  };
+
+  // Função para obter array atual (chamada apenas quando necessário)
+  const getCurrentVppr = () => {
+    const result = [];
+    const buffer = vpprBufferRef.current;
+    for (let i = 0; i < bufferLengthVpprRef.current; i++) {
+      result.push(buffer[(bufferStartVpprRef.current + i) % MAX_CANDLES]);
+    }
+    return result;
+  };
+  //-----------------------------------------------------------------------------------//
+  const controllerRef = useRef(null);
   const getVppr = async (symbol) => {
     if (!symbol) return;
 
-    if (controller) controller.abort();
-    controller = new AbortController();
-    startGlobalLoading();
+    if (controllerRef.current) controllerRef.current.abort();
+    controllerRef.current = new AbortController();
+
+
     try {
       const { data } = await axios.get(
         `${url}/api/vppr`,
         {
           params: { symbol, modo },
-          signal: controller.signal
+          signal: controllerRef.current.signal
         }
       );
 
       if (!Array.isArray(data)) return;
 
-      const value = [];
-      const time = [];
-      const ema = [];
+      // Otimização: processa em chunks com TypedArrays
+      const len = data.length;
+      const value = new Float64Array(len);
+      const timestamps = new Uint32Array(len);
+      const ema = new Float64Array(len);
 
-      for (const p of data) {
-        value.push(+p.vppr);
-        ema.push(+p.vppr_ema);
-        time.push(p.time.split(' ')[0]);
+      // Processa em chunks para não travar a UI
+      const CHUNK_SIZE = 5000;
+      for (let i = 0; i < len; i += CHUNK_SIZE) {
+        const end = Math.min(i + CHUNK_SIZE, len);
+
+        // Permite que a UI atualize entre chunks
+        await new Promise(resolve => setTimeout(resolve, 0));
+
+        for (let j = i; j < end; j++) {
+          const v = data[j];
+          value[j] = Number(v.vppr);
+          ema[j] = Number(v.vppr_ema);
+          timestamps[j] = new Date(v.time.replace(' ', 'T')).getTime() / 1000;
+        }
       }
+
       setVppr(value)
-      setVpprTime(time)
+      setVpprTime(timestamps)
       setVpprEma(ema)
+
+
+      // guarda tudo internamente
+      fullDataVpprRef.current = data;
+      indexVpprRef.current = 0;
+
+
+      // Em modo realTimeMode, NÃO limpa dados anteriores (mantém histórico)
+      // Em modo simulação, limpa para começar do zero
+      if (modo !== "realTimeMode") {
+        setVpprComplete([]);
+      } else {
+        setVpprComplete(getCurrentVppr());
+      }
 
     } catch (error) {
       console.error("Erro ao buscar dados do VPPR", error);
     } finally {
-      stopGlobalLoading();
+      startIncrementalFeedVppr(5);
     }
   }
+
+  // Motor incremental para alimentar os gráficos gradualmente, evitando travamentos e permitindo simulação fluida
+  const startIncrementalFeedVppr = (speed = 5) => {
+    if (modo === 'simulation') return; // incremental feed é apenas para real-time, simulação tem motor próprio
+    try {
+      intervalVpprRef.current?.clear?.();
+
+      // ⚡ Delta-tracking: se já processamos dados antes, pule os dados antigos
+      if (modo === "realTimeMode" && lastProcessedTimestampVpprRef.current) {
+        const lastTs = new Date(lastProcessedTimestampVpprRef.current).getTime();
+
+        const startIdx = fullDataVpprRef.current.findIndex(
+          candle => new Date(candle.time).getTime() > lastTs
+        );
+        if (startIdx === -1) {
+          console.log("✅ Nenhum dado novo para processar em modo real-time (VPPR).");
+          return;
+        }
+        indexVpprRef.current = startIdx;
+        console.log(`🚀 Delta-tracking (VPPR): pulando para índice ${startIdx}, processando apenas dados novos.`);
+      } else {
+        indexVpprRef.current = 0;
+      }
+
+      // Processa em batches para reduzir renders
+      const BATCH_SIZE = speed;
+      let frameId;
+
+      const processBatch = () => {
+        if (indexVpprRef.current >= fullDataVpprRef.current.length) {
+          if (fullDataVpprRef.current.length > 0) {
+            lastProcessedTimestampVpprRef.current =
+              fullDataVpprRef.current[fullDataVpprRef.current.length - 1].time;
+          }
+          return;
+        }
+
+        const endIdx = Math.min(
+          indexVpprRef.current + BATCH_SIZE,
+          fullDataVpprRef.current.length
+        );
+
+        for (let i = indexVpprRef.current; i < endIdx; i++) {
+          addVpprToBuffer(fullDataVpprRef.current[i]);
+        }
+
+        setVpprComplete(getCurrentVppr());
+
+        indexVpprRef.current = endIdx;
+
+        if (indexVpprRef.current < fullDataVpprRef.current.length) {
+          frameId = requestAnimationFrame(processBatch);
+        }
+      };
+      // Inicia processamento
+      frameId = requestAnimationFrame(processBatch);
+
+      // Cleanup
+      intervalVpprRef.current = {
+        current: frameId,
+        clear: () => cancelAnimationFrame(frameId)
+      };
+
+    } catch (error) {
+      console.error("Erro no feed incremental:", error);
+    }
+  };
+
+  // No componente principal
+  const workerVpprRef = useRef(null);
+
+  useEffect(() => {
+    workerVpprRef.current = new Worker('/candleWorkerVppr.js');
+    workerVpprRef.current.onmessage = (e) => {
+      const { type, data, lastTimestamp } = e.data;
+
+      if (type === 'newData' && data.length > 0) {
+        // Processa dados em batches no próximo frame
+        requestAnimationFrame(() => {
+          data.forEach(candle => addVpprToBuffer(candle));
+          setVpprComplete(getCurrentVppr());
+          lastProcessedTimestampVpprRef.current = lastTimestamp;
+        });
+      }
+    };
+
+    return () => workerVpprRef.current?.terminate();
+  }, []);
+
+
   /**-------------------------------------------------------------------
    * //////////////////////////////////////////////////////////////////
    ----------------------------------------------------------------------*/
@@ -874,6 +1766,9 @@ const ContextApi = (props) => {
       console.error("Erro ao buscar observações de mercado:", error);
     }
   };
+
+
+  //Função para remover símbolo da observação de mercado
   const handleRemoveSymbol = async (symbol) => {
     if (!symbol) {
       return;
@@ -1068,9 +1963,13 @@ const ContextApi = (props) => {
   /**--------------------------------------------------------------------
    * ///////////////////////////////////////////////////////////////////
    ----------------------------------------------------------------------*/
+  /*#######################################################################
+              🎯logica de compra e venda início🎯 OPERAÇÃO REAL
+  ########################################################################*/
+
 
   /*#######################################################################
-                          🎯logica de compra e venda início🎯
+                          🎯logica de compra e venda início🎯 OPERAÇÃO
   ########################################################################*/
 
   // Estado para armazenar o último topo anterior
@@ -1103,26 +2002,21 @@ const ContextApi = (props) => {
   const canExecuteReactionSecRef = useRef(false);
   const canExecuteRallySecRef = useRef(false);
 
+
+  const movements = useMemo(() => {
+    if (modo === "realTimeMode") {
+      return dadosPrice;
+    }
+    return simulationValueDataComplete;
+  }, [dadosPrice, simulationValueDataComplete, modo]);
+
+
   useEffect(() => {
     // dados de classificação simulados 
-    let movements = [];
-    if (modo === "realTimeMode") {
-      movements = dadosPrice.map(m => ({
-        ...m,
-        tipo: String(m.tipo || "").trim(),
-      }));
-    } else {
-      movements = simulationValueDataComplete;
-    }
-
-    if (!movements || movements.length === 0) {
-      return;
-    }
-    console.log('movements:', movements);
+    if (!movements || movements.length === 0) return;
 
     // variaveis e constantes de controle
     let naturalReaction = null;
-    let pivotReactionSec = null;
     let naturalReactionSec = null;
     let rallySecundaria = null;
 
@@ -1147,6 +2041,7 @@ const ContextApi = (props) => {
         if (type.includes('Reação Natural')) {
           canExecuteReactionRef.current = true
           canExecuteRallyRef.current = false
+          naturalReactionSec = null;
         };
         if (type.includes('Rally Natural')) {
           canExecuteRallyRef.current = true
@@ -1155,6 +2050,7 @@ const ContextApi = (props) => {
         if (type.includes('Rally secundário')) {
           canExecuteReactionSecRef.current = false
           canExecuteRallySecRef.current = true
+          naturalReaction = null;
         };
         if (type.includes('Reação secundária')) {
           canExecuteRallySecRef.current = false
@@ -1167,8 +2063,8 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
-            index: movements.length - 1 - i
+            limite: movement.limite,
+            index: i
           }
           continue;
         };
@@ -1184,7 +2080,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           }
           encontrouReacaoNatural = true;
@@ -1196,7 +2092,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([]) // reseta os pontos
@@ -1208,7 +2104,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([]) // reseta os pontos
@@ -1232,7 +2128,7 @@ const ContextApi = (props) => {
       let encontrouRallyNaturalParaSec = false;
       let encontrouRallyNaturalSec_retest = false;
       let reacaoSecundaria = false;
-
+      let pivotReactionSec = null;
 
       for (let i = movements.length - 1; i >= 0; i--) {
         const movement = movements[i];
@@ -1244,7 +2140,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           }
           encontrouRallyNatural = true;
@@ -1255,7 +2151,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([]) // reseta os pontos
@@ -1267,7 +2163,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([]) // reseta os pontos
@@ -1280,7 +2176,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([]) // reseta os pontos
@@ -1293,7 +2189,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([]) // reseta os pontos
@@ -1310,7 +2206,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([])
@@ -1326,7 +2222,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([])
@@ -1343,7 +2239,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           continue;
@@ -1354,7 +2250,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([])
@@ -1384,7 +2280,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([])
@@ -1396,7 +2292,7 @@ const ContextApi = (props) => {
             closePrice: movement.closePrice,
             closeTime: movement.closeTime,
             tipo: movement.tipo,
-            atr: movement.atr,
+            limite: movement.limite,
             index: i
           };
           setRetestPoints([])
@@ -1534,6 +2430,7 @@ const ContextApi = (props) => {
 
     // reteste de pivo de rally
     const pivoRally = rallyPivot[rallyPivot.length - 2];
+
     const pivoRallyPrimary = rallyPivot[rallyPivot.length - 1];
 
     // reteste de pivo rally secundário
@@ -1619,15 +2516,15 @@ const ContextApi = (props) => {
     //  RETESTE DE TENDÊNCIA
     // ===============================
     if (pivo && naturalReaction && canExecuteReactionRef.current) {
-      const atr = pivo.atr;
-      const tolerance = atr / 3;
+      const limite = pivo.limite;
+      const tolerance = limite / 3;
       const high = pivo.closePrice + tolerance;
       const low = pivo.closePrice - tolerance;
       const lowBuy = pivo.closePrice - (tolerance * 2);
       const highBuy = pivo.closePrice + (tolerance * 2);
 
-      const buyPoint = pivo.closePrice + atr / 2;
-      const sellPoint = pivo.closePrice - atr / 2;
+      const buyPoint = pivo.closePrice + limite / 2;
+      const sellPoint = pivo.closePrice - limite / 2;
 
       const eventId = buildEventId(pivo, naturalReaction);
       if (eventId && lastTrendRetestIdRef.current !== eventId) {
@@ -1670,12 +2567,12 @@ const ContextApi = (props) => {
     // SAÍDA DE TENDÊNCIA
     // ===============================
     if (TrendPivot && naturalRally && canExecuteRallyRef.current) {
-      const atr = TrendPivot.atr;
-      const tolerance = atr / 3;
+      const limite = TrendPivot.limite;
+      const tolerance = limite / 3;
       const high = TrendPivot.closePrice + tolerance;
       const low = TrendPivot.closePrice - tolerance;
-      const sellExit = TrendPivot.closePrice - atr / 2;
-      const buyExit = TrendPivot.closePrice + atr / 2;
+      const sellExit = TrendPivot.closePrice - limite / 2;
+      const buyExit = TrendPivot.closePrice + limite / 2;
 
       const eventId = buildEventId(TrendPivot, naturalRally);
       if (eventId && lastTrendExitIdRef.current !== eventId) {
@@ -1712,15 +2609,15 @@ const ContextApi = (props) => {
     // ======================================================================
     // RETEST NO PIVO DE RALLY EM UMA REAÇÃO NATURAL (pullback pós-breakout)
     // ======================================================================
-    console.log("pivoRallyPrimary", pivoRallyPrimary);
 
     if (pivoRallyPrimary && naturalReaction && canExecuteReactionRef.current) {
-      const atr = pivoRallyPrimary.atr;
-      const tolerance = atr / 3;
+      const limite = pivoRallyPrimary.limite;
+      const tolerance = limite / 3;
       const high = pivoRallyPrimary.closePrice + tolerance;
       const low = pivoRallyPrimary.closePrice - tolerance;
-      const buyPoint = pivoRallyPrimary.closePrice + atr / 2;
-      const sellPoint = pivoRallyPrimary.closePrice - atr / 2;
+      const buyPoint = pivoRallyPrimary.closePrice + limite / 2;
+      const sellPoint = pivoRallyPrimary.closePrice - limite / 2;
+
 
       const eventId = buildEventId(pivoRallyPrimary, naturalReaction);
       if (eventId && lastRallyRetestIdRef.current !== eventId) {
@@ -1728,8 +2625,8 @@ const ContextApi = (props) => {
         // 🟢 Compra rally
         if (
           currentTrend === "Tendência Alta" &&
-          naturalReaction.closePrice <= high &&
-          naturalReaction.closePrice >= low
+          naturalReaction.closePrice >= low &&
+          naturalReaction.closePrice <= high
         ) {
           setRetestPoints([
             { name: "pivot", value: pivoRallyPrimary.closePrice },
@@ -1742,8 +2639,9 @@ const ContextApi = (props) => {
         // 🔴 Venda rally
         if (
           currentTrend === "Tendência Baixa" &&
-          naturalReaction.closePrice <= high &&
-          naturalReaction.closePrice >= low
+          naturalReaction.closePrice >= low &&
+          naturalReaction.closePrice <= high
+
         ) {
           setRetestPoints([
             { name: "pivot", value: pivoRallyPrimary.closePrice },
@@ -1755,16 +2653,17 @@ const ContextApi = (props) => {
         };
       };
     };
+
     // ======================================================================
     // RETEST NO PIVO DE RALLY EM UMA REAÇÃO SECUNDÁRIA (pullback pós-breakout)
     // ======================================================================
     if (pivoRallyPrimary && naturalReactionSec && canExecuteReactionSecRef.current) {
-      const atr = pivoRallyPrimary.atr;
-      const tolerance = atr / 3;
+      const limite = pivoRallyPrimary.limite;
+      const tolerance = limite / 3;
       const high = pivoRallyPrimary.closePrice + tolerance;
       const low = pivoRallyPrimary.closePrice - tolerance;
-      const buyPoint = pivoRallyPrimary.closePrice + atr / 2;
-      const sellPoint = pivoRallyPrimary.closePrice - atr / 2;
+      const buyPoint = pivoRallyPrimary.closePrice + limite / 2;
+      const sellPoint = pivoRallyPrimary.closePrice - limite / 2;
 
       const eventId = buildEventId(pivoRallyPrimary, naturalReactionSec);
       if (eventId && lastRallyRetestIdRef.current !== eventId) {
@@ -1780,7 +2679,7 @@ const ContextApi = (props) => {
             { name: "time", value: naturalReactionSec.closeTime },
             { name: "buy", value: buyPoint },
             { name: "stop", value: sellPoint },
-            { name: "type", value: "ENTRY_BUY_RALLY" }
+            { name: "type", value: "ENTRY_BUY_RALLY_SEC" }
           ]);
         };
         // 🔴 Venda rally
@@ -1794,7 +2693,7 @@ const ContextApi = (props) => {
             { name: "time", value: naturalReactionSec.closeTime },
             { name: "sell", value: sellPoint },
             { name: "stop", value: buyPoint },
-            { name: "type", value: "ENTRY_SELL_RALLY" }
+            { name: "type", value: "ENTRY_SELL_RALLY_SEC" }
           ]);
         };
       };
@@ -1804,15 +2703,14 @@ const ContextApi = (props) => {
     // RETEST NO PIVO DE RALLY EM UMA 
     // REAÇÃO SECUNDÁRIA
     // ===============================
-    console.log("pivoRally", pivoRally);
 
     if (pivoRally && naturalReactionSec && canExecuteReactionSecRef.current) {
-      const atr = pivoRally.atr;
-      const tolerance = atr / 3;
+      const limite = pivoRally.limite;
+      const tolerance = limite / 3;
       const high = pivoRally.closePrice + tolerance;
       const low = pivoRally.closePrice - tolerance;
-      const buyPoint = pivoRally.closePrice + atr / 2;
-      const sellPoint = pivoRally.closePrice - atr / 2;
+      const buyPoint = pivoRally.closePrice + limite / 2;
+      const sellPoint = pivoRally.closePrice - limite / 2;
 
       const eventId = buildEventId(pivoRallyPrimary.closePrice, naturalReactionSec);
       if (eventId && lastRallyRetestIdPrimaryRef.current !== eventId) {
@@ -1852,12 +2750,12 @@ const ContextApi = (props) => {
     // SAÍDA REAÇÃO SECUNDÁRIA
     // ===============================
     if (pivoRallySec && rallySecundaria && canExecuteRallySecRef.current) {
-      const atr = pivoRallySec.atr;
-      const tolerance = atr / 3;
+      const limite = pivoRallySec.limite;
+      const tolerance = limite / 3;
       const highExit = pivoRallySec.closePrice + tolerance;
       const lowExit = pivoRallySec.closePrice - tolerance;
-      const sellExit = pivoRallySec.closePrice - atr / 2;
-      const buyExit = pivoRallySec.closePrice + atr / 2;
+      const sellExit = pivoRallySec.closePrice - limite / 2;
+      const buyExit = pivoRallySec.closePrice + limite / 2;
 
 
       const eventId = buildEventId(pivoRallySec, rallySecundaria);
@@ -1874,7 +2772,7 @@ const ContextApi = (props) => {
             { name: "pivo", value: pivoRallySec.closePrice },
             { name: "time", value: rallySecundaria.closeTime },
             { name: "stop", value: sellExit },
-            { name: "type", value: "Exit_Buy_ReactionSec" }
+            { name: "type", value: "EXIT_BUY_SEC" }
           ]);
         };
         // 🔴
@@ -1886,19 +2784,19 @@ const ContextApi = (props) => {
             { name: "pivo", value: pivoRallySec.closePrice },
             { name: "time", value: rallySecundaria.closeTime },
             { name: "stop", value: buyExit },
-            { name: "type", value: "Exit_sell_ReactionSec" }
+            { name: "type", value: "EXIT_SELL_SEC" }
           ]);
         };
       };
     };
 
     if (rallySecExit && rallySecundaria && canExecuteRallySecRef.current) {
-      const atr = rallySecExit.atr;
-      const tolerance = atr / 3;
+      const limite = rallySecExit.limite;
+      const tolerance = limite / 3;
       const highExit = rallySecExit.closePrice + tolerance;
       const lowExit = rallySecExit.closePrice - tolerance;
-      const sellExit = rallySecExit.closePrice - atr / 2;
-      const buyExit = rallySecExit.closePrice + atr / 2;
+      const sellExit = rallySecExit.closePrice - limite / 2;
+      const buyExit = rallySecExit.closePrice + limite / 2;
 
 
       const eventId = buildEventId(rallySecExit, rallySecundaria);
@@ -1914,7 +2812,7 @@ const ContextApi = (props) => {
             { name: "pivo", value: rallySecExit.closePrice },
             { name: "time", value: rallySecundaria.closeTime },
             { name: "stop", value: sellExit },
-            { name: "type", value: "Exit_Buy_ReactionSec" }
+            { name: "type", value: "EXIT_BUY_SEC" }
           ]);
         };
         // 🔴 Saída de venda de retest
@@ -1926,7 +2824,7 @@ const ContextApi = (props) => {
             { name: "pivo", value: rallySecExit.closePrice },
             { name: "time", value: rallySecundaria.closeTime },
             { name: "stop", value: buyExit },
-            { name: "type", value: "Exit_sell_ReactionSec" }
+            { name: "type", value: "EXIT_SELL_SEC" }
           ]);
         };
       };
@@ -1936,14 +2834,14 @@ const ContextApi = (props) => {
     //          ROMPIMENTO 
     // ===============================
     if (pivotBreak) {
-      const atr = pivotBreak.atr;
+      const limite = pivotBreak.limite;
       const pivotId = pivotBreak.closeTime;
       const type = pivotBreak.tipo;
-      const sellExit = pivotBreak.closePrice - atr;
-      const buyExit = pivotBreak.closePrice + atr;
+      const sellExit = pivotBreak.closePrice - limite / 2;
+      const buyExit = pivotBreak.closePrice + limite / 2;
 
-      const pivoBuy = pivotBreak.closePrice - (atr / 2);
-      const pivoSell = pivotBreak.closePrice + (atr / 2);
+      const pivoBuy = pivotBreak.closePrice - (limite / 2);
+      const pivoSell = pivotBreak.closePrice + (limite / 2);
 
       if (lastBreakoutIdRef.current !== pivotId) {
         lastBreakoutIdRef.current = pivotId;
@@ -1974,68 +2872,68 @@ const ContextApi = (props) => {
       };
     };
   },
-    [
-      simulationValueDataComplete,
-    ]);
-  console.log("COMPRA OU VENDA >>", retestPoints);
-  /*#######################################################################
+    [movements]);
+  //console.log("COMPRA OU VENDA >>", retestPoints);
+  /*######################################### ##############################
                                🎯#########🎯
     ########################################################################*/
 
   /*#####################################################################
                    🎯logica de confirmação usando vppr 🎯
     #####################################################################*/
-  const [signalsVppr, setSignalsVppr] = useState([]);
-  const [signalsPowerVppr, setSignalsPowerVppr] = useState([]);
+  const [signalsVppr, setSignalsVppr] = useState('');
+
+
+  const movementsVppr = useMemo(() => {
+    if (modo === "realTimeMode") {
+      return vpprComplete;
+    }
+    return simulationValueDataCompleteVppr;
+  }, [modo, vpprComplete, simulationValueDataCompleteVppr]);
+
 
   useEffect(() => {
-    const movementsVppr = simulationValueDataCompleteVppr;
-    if (!movementsVppr?.length) return;
-    const vpprSignals = [];
-    const vpprPowerSignals = [];
+    if (!movementsVppr || movementsVppr.length === 0) return;
+
+    let vpprSignals = [];
+    let vpprPowerSignalsBuy = false;
+    let vpprPowerSignalsSell = false;
 
     for (let i = 0; i < movementsVppr.length; i++) {
       const current = movementsVppr[i];
 
-      const percentage = current.vppr_ema * 0.1;
+      const percentage = current.vppr_ema * 0.2; // 20% de distância da média móvel
       const bandsUp = current.vppr_ema + percentage;
       const bandsLow = current.vppr_ema - percentage;
 
-      if (current.vppr > bandsUp) {
-        vpprSignals.push({
-          index: i,
-          signal: "buy",
-          vppr: current.vppr,
-          vppr_ema: current.vppr_ema,
-        });
-      } else if (current.vppr < bandsLow) {
-        vpprSignals.push({
-          index: i,
-          signal: "sell",
-          vppr: current.vppr,
-          vppr_ema: current.vppr_ema,
-        });
-      }
+      const vppr = current.vppr;
+      const vpprEma = current.vppr_ema;
+
+      // Sinais de força do VPPR (com base na direção do VPPR)
       if (current.vppr > 0) {
-        vpprPowerSignals.push({
-          index: i,
-          signal: "buy power",
-          vppr: current.vppr,
-          vppr_ema: current.vppr_ema,
-        });
+        vpprPowerSignalsBuy = true;
       } else if (current.vppr < 0) {
-        vpprPowerSignals.push({
-          index: i,
-          signal: "sell power",
-          vppr: current.vppr,
-          vppr_ema: current.vppr_ema,
-        });
+        vpprPowerSignalsSell = true;
+      }
+
+      // Sinais de tendência do VPPR (com base na posição do VPPR em relação à média móvel e às bandas)
+      if (vpprPowerSignalsBuy && vppr > vpprEma) {
+        vpprSignals = "trend-buy"
+      } else if (vpprPowerSignalsSell && vppr > bandsUp) {
+        vpprSignals = "trend-buy"
+      }
+
+      if (vpprPowerSignalsSell && vppr < vpprEma) {
+        vpprSignals = "trend-sell"
+      } else if (vpprPowerSignalsBuy && vppr < bandsLow) {
+        vpprSignals = "trend-sell"
       }
     };
-    setSignalsVppr(vpprSignals);
-    setSignalsPowerVppr(vpprPowerSignals);
 
-  }, [simulationValueDataCompleteVppr]);
+    setSignalsVppr(vpprSignals);
+  }, [movementsVppr]);
+  console.log("SignalsVppr", signalsVppr);
+
   /*#####################################################################
                                 🎯########🎯
     #####################################################################*/
@@ -2049,9 +2947,16 @@ const ContextApi = (props) => {
   const [signalsAmrsiSellReentry, setSignalsAmrsiSellReentry] = useState([]);/*(sobrevenda-reentrada)*/
   const [signalsAmrsiBuyReentry, setSignalsAmrsiBuyReentry] = useState([]);/*(sobrevenda-reentrada)*/
 
+
+  const movementsAmrsi = useMemo(() => {
+    if (modo === "realTimeMode") {
+      return rsiComplete;
+    }
+    return simulationValueDataCompleteRsi;
+  }, [modo, rsiComplete, simulationValueDataCompleteRsi]);
+
   useEffect(() => {
-    const movementAmrsi = simulationValueDataCompleteRsi;
-    if (!movementAmrsi?.length) return;
+    if (!movementsAmrsi || movementsAmrsi.length === 0) return;
 
     const amRsiSignalBuy = [];
     const amRsiSinalSell = [];
@@ -2065,9 +2970,12 @@ const ContextApi = (props) => {
     let overboughtReentry = false;
     let oversoldReentry = false;
 
+    for (let i = 0; i < movementsAmrsi.length; i++) {
+      const movement = movementsAmrsi[i];
 
-    for (let i = 0; i < movementAmrsi.length; i++) {
-      const { amrsi } = movementAmrsi[i];
+      // the API may return amrsi, rsi_ma or rsi – use whichever is available
+      const amrsi = movement.amrsi ?? movement.rsi_ma ?? movement.rsi;
+      if (amrsi == null) continue; // skip missing values
 
       /* ---------- SOBRECOMPRA PARCIAL ---------- */
       // 1️⃣ entra em sobrecompra
@@ -2076,11 +2984,13 @@ const ContextApi = (props) => {
       }
 
       // 2️⃣ início da correção → venda
-      if (wasOverbought && amrsi <= 70) {
+      if (wasOverbought && amrsi <= 70 && currentTrend === "Tendência Alta") {
         amRsiSinalSell.push({
           index: i,
           signal: "amrsi-partial-sell",
           amrsi,
+          trend: currentTrend,
+          date: movement.time,
         });
         wasOverbought = false; // reseta após sinal
       }
@@ -2092,11 +3002,14 @@ const ContextApi = (props) => {
       }
 
       // 4️⃣ início da correção → compra
-      if (wasOversold && amrsi >= 30) {
+      if (wasOversold && amrsi >= 30 && currentTrend === "Tendência Baixa") {
         amRsiSignalBuy.push({
           index: i,
           signal: "amrsi-partial-buy",
           amrsi,
+          trend: currentTrend,
+          date: movement.time,
+
         });
         wasOversold = false; // reseta após sinal
       }
@@ -2105,25 +3018,28 @@ const ContextApi = (props) => {
       if (amrsi >= 70) {
         overboughtReentry = true;
       }
-      if (overboughtReentry && amrsi <= 65) {
+      if (overboughtReentry && amrsi <= 65 && currentTrend === "Tendência Baixa") {
         amRsiSinalSellReentry.push({
           index: i,
           signal: "amrsi-Reentry-sell",
           amrsi,
+          trend: currentTrend,
+          date: movement.time,
         });
         overboughtReentry = false; // reseta após sinal
       }
-
 
       /* ---------- SOBREVENDA REENTRADA---------- */
       if (amrsi <= 30) {
         oversoldReentry = true;
       }
-      if (oversoldReentry && amrsi >= 35) {
+      if (oversoldReentry && amrsi >= 35 && currentTrend === "Tendência Alta") {
         amRsiSignalBuyReentry.push({
           index: i,
           signal: "amrsi-Reentry-buy",
           amrsi,
+          trend: currentTrend,
+          date: movement.time,
         });
         oversoldReentry = false; // reseta após sinal
       }
@@ -2133,12 +3049,166 @@ const ContextApi = (props) => {
     setSignalsAmrsiBuy(amRsiSignalBuy);
     /**Guarda dados na variável de estado (SOBREVENDA REENTRADA) */
     setSignalsAmrsiSellReentry(amRsiSinalSellReentry);
-    setSignalsAmrsiBuyReentry(amRsiSignalBuyReentry)
+    setSignalsAmrsiBuyReentry(amRsiSignalBuyReentry);
 
-  }, [simulationValueDataCompleteRsi]);
+  }, [movementsAmrsi]);
+
   /*#####################################################################
                           🎯############### 🎯
     #####################################################################*/
+  /*#####################################################################
+                  🎯filtra pontos de entrada 🎯
+#####################################################################*/
+
+  const [newConfirmBuyEntry, setNewConfirmBuyEntry] = useState([]);
+  const [newConfirmSellEntry, setNewConfirmSellEntry] = useState([]);
+  const [newExitBuy, setNewExitBuy] = useState([]);
+  const [newExitSell, setNewExitSell] = useState([]);
+
+  useEffect(() => {
+    if (!retestPoints || retestPoints.length === 0) return;
+
+    const dataPriceCurrent = simulationCandleComplete.length > 0
+      ? simulationCandleComplete
+      : candlesComplete;
+
+    if (!dataPriceCurrent || dataPriceCurrent.length === 0) return;
+
+
+    // Itera sobre todos os preços da simulação para verificar entradas
+    const newBuy = [];
+    const newSell = [];
+    const exitBuy = [];
+    const exitSell = [];
+
+
+
+    // Converte array de {name, value} para objeto único
+    const pointObj = retestPoints.reduce((obj, item) => {
+      obj[item.name] = item.value;
+      return obj;
+    }, {});
+
+
+
+    // Verifica para cada preço na simulação se atingiu o ponto de entrada ou saída
+    dataPriceCurrent.forEach((currentPrice, index) => {
+      const prevPrice = dataPriceCurrent[index - 1];
+      if (
+        prevPrice >= pointObj.buy &&
+        (pointObj.type === "ENTRY_BUY_TREND" ||
+          pointObj.type === "ENTRY_BUY_RALLY" ||
+          pointObj.type === "ENTRY_BUY_RALLY_SEC") &&
+        signalsVppr === "trend-buy"
+      ) {
+        // Adiciona apenas se não já confirmado
+        if (!newBuy.some(entry => entry.time === pointObj.time)) {
+          newBuy.push({ ...pointObj, index });
+        }
+      } else if (
+        prevPrice <= pointObj.sell &&
+        (pointObj.type === "ENTRY_SELL_TREND" ||
+          pointObj.type === "ENTRY_SELL_RALLY" ||
+          pointObj.type === "ENTRY_SELL_RALLY_SEC") &&
+        signalsVppr === "trend-sell"
+      ) {
+        // Adiciona apenas se não já confirmado
+        if (!newSell.some(entry => entry.time === pointObj.time)) {
+          newSell.push({ ...pointObj, index });
+        }
+      }
+      else if (signalsVppr === "trend-buy" && pointObj.type === "pivotBreak-buy") {
+        if (!newBuy.some(entry => entry.time === pointObj.time)) {
+          newBuy.push({ ...pointObj, index });
+        }
+      }
+      else if (signalsVppr === "trend-sell" && pointObj.type === "pivotBreak-sell") {
+        if (!newSell.some(entry => entry.time === pointObj.time)) {
+          newSell.push({ ...pointObj, index });
+        }
+      }
+
+      //////////////////////////-----------//-------------///////////////////////
+
+      if (
+        pointObj.type === "EXIT_BUY_TREND" ||
+        pointObj.type === "EXIT_BUY_SEC" &&
+        prevPrice > currentPrice <= pointObj.stop
+      ) {
+        if (!exitBuy.some(entry => entry.time === pointObj.time)) {
+          exitBuy.push({ ...pointObj, index });
+        }
+      }
+      else if (
+        pointObj.type === "EXIT_SELL_TREND" ||
+        pointObj.type === "EXIT_SELL_SEC" &&
+        prevPrice < currentPrice >= pointObj.stop
+      ) {
+        if (!exitSell.some(entry => entry.time === pointObj.time)) {
+          exitSell.push({ ...pointObj, index });
+        }
+      }
+    });
+
+
+    // Acumula os novos confirmados sem duplicatas
+    setNewConfirmBuyEntry(newBuy);
+    setNewConfirmSellEntry(newSell);
+
+    // Saídas de operações
+    setNewExitBuy(exitBuy);
+    setNewExitSell(exitSell);
+
+  }, [retestPoints, signalsVppr, simulationCandleValue, candlesComplete]);
+
+  console.log("newConfirmBuyEntry:", newConfirmBuyEntry)
+  console.log("NewConfirmSellEntry:", newConfirmSellEntry);
+  console.log("NewExitBuy", newExitBuy);
+  console.log("NewExitSell", newExitSell);
+
+
+
+  /*#####################################################################
+                          🎯############### 🎯
+    #####################################################################*/
+  /*#####################################################################
+                      🎯ENVIA OS DADOS PARA BACKTESTE 🎯
+#####################################################################*/
+  const backtest = async () => {
+    if (modo !== "simulation") {
+      return;
+    }
+    if (!symbol) {
+      console.warn("Símbolo não encontrado para salvar backtest");
+      return;
+    }
+
+    try {
+      const response = await axios.post(`${url}/api/save_backtest_results`, {},
+        {
+          params: {
+            symbol: symbol,
+            modo: modo,
+            signalsVppr,
+            signalsAmrsiSell,
+            signalsAmrsiBuy,
+            signalsAmrsiSellReentry,
+            signalsAmrsiBuyReentry,
+          }
+        });
+      console.log("Backtest salvo com sucesso:", response.data);
+    }
+    catch (error) {
+      console.error("Erro ao salvar backtest:", error);
+    }
+  }
+
+  /*#####################################################################
+                          🎯############### 🎯
+    #####################################################################*/
+
+
+
 
 
   /**========================================================================
@@ -2155,8 +3225,28 @@ const ContextApi = (props) => {
     if (realTime === "realTimeMode") {
       clearTimeout(simulationTimeoutRef.current);
       clearTimeout(simulationTimeoutSyncRef.current);
+      clearTimeout(simulationRsiTimeoutRef.current);
+      clearTimeout(simulationVpprTimeoutRef.current);
+      clearTimeout(simulationCandleTimeoutRef.current);
+
+      clearTimeout(timeoutRsiRef.current);
+      clearTimeout(intervalVpprRef.current);
+      clearTimeout(intervalRsiRef.current);
+      clearTimeout(intervalRef.current);
       offsetRefPrimary.current = 0;
       offsetRefRsi.current = 0;
+      offsetRefVppr.current = 0;
+      offsetRefCandle.current = 0;
+      setSimulationCandleComplete([]);
+      setSimulationCandleValue([]);
+      setSimulationCandleLabel([]);
+      // Permite reutilizar delta-tracking em próximas chamadas de modo real-time
+      // (não limpa os refs para manter histórico entre API calls)
+    } else {
+      // Ao sair do modo real-time, limpa os timestamp refs para próxima vez que entrar
+      lastProcessedTimestampRef.current = null;
+      lastProcessedTimestampRsiRef.current = null;
+      lastProcessedTimestampVpprRef.current = null;
       offsetRefVppr.current = 0;
       if (simulationControllerRef.current) {
         simulationControllerRef.current.abort();
@@ -2177,6 +3267,8 @@ const ContextApi = (props) => {
       clearTimeout(simulationTimeoutRef.current);
       clearTimeout(simulationRsiTimeoutRef.current);
       clearTimeout(simulationVpprTimeoutRef.current);
+      clearTimeout(simulationCandleTimeoutRef.current);
+      clearTimeout(timeoutRsiRef.current);
       if (simulationControllerRef.current) {
         simulationControllerRef.current.abort();
       }
@@ -2185,9 +3277,6 @@ const ContextApi = (props) => {
   /**========================================================================
    * ///////////////////////////////////////////////////////////////////////
    * ========================================================================*/
-
-
-
 
   useEffect(() => {
     async function loadData() {
@@ -2203,7 +3292,7 @@ const ContextApi = (props) => {
             getMarketObservation(),
             getMarketObservationComplete(),
             correlation(),
-            assetCorrelation(savedSymbol)
+            assetCorrelation(savedSymbol),
           ], [savedSymbol]);
         } else {
           console.warn("Nenhum símbolo salvo encontrado!");
@@ -2217,32 +3306,58 @@ const ContextApi = (props) => {
     /*=============================
         Executa a cada 15 minutos
       =============================*/
+
+    const timeframeToMs = (tf) => {
+      if (!tf) return 15 * 60 * 1000;
+      const s = String(tf).trim();
+      const m = s.match(/^(\d+)\s*([mhd])$/i);
+      if (!m) return 15 * 60 * 1000;
+      const value = parseInt(m[1], 10);
+      const unit = m[2].toLowerCase();
+      switch (unit) {
+        case 'm':
+          return value * 60 * 1000;
+        case 'h':
+          return value * 60 * 60 * 1000;
+        case 'd':
+          return value * 24 * 60 * 60 * 1000;
+        default:
+          return 15 * 60 * 1000;
+      }
+    };
+
+
+    // always clear existing schedules when re-evaluating
+    clearTimeout(timeoutRef.current);
+    clearInterval(intervalRef.current);
+
     if (realTime === "realTimeMode") {
-      const now = new Date();
-      const minutes = now.getMinutes();
-      const seconds = now.getSeconds();
-      const ms = now.getMilliseconds();
+      const intervalMs = timeframeToMs(timeCurrent);
 
-      const nextQuarter = Math.ceil(minutes / 15) * 15;
-      const minutesToWait = nextQuarter === 60 ? 60 - minutes : nextQuarter - minutes;
+      if (!intervalMs || Number.isNaN(intervalMs) || intervalMs <= 0) {
+        console.warn('timeframe inválido:', timeCurrent);
+      } else {
+        const now = Date.now();
+        // Próximo múltiplo exato do timeframe
+        const nextTick = Math.ceil(now / intervalMs) * intervalMs;
 
-      let delay =
-        (minutesToWait * 60 * 1000) -
-        (seconds * 1000) -
-        ms;
-      // ⏱️ atraso extra de 30 segundos
-      delay += 30 * 1000;
+        let delay = nextTick - now;
+        if (delay < 0) delay = 0;
 
-      console.log(
-        `⏳ Atualização programada para daqui a ${Math.round(delay / 1000)} segundos`
-      );
+        // pequeno buffer (9s) para garantir candle fechado; remova se não quiser buffer
+        const bufferMs = 9000;
+        delay += bufferMs;
 
-      setTimeout(() => {
-        updateAllData();
-        setInterval(() => {
+        console.log(`⏳ Próxima atualização em ${Math.round(delay / 1000)} segundos (intervalo ${intervalMs}ms)`);
+
+        // Salva ids em refs já usados no código para permitir clearTimeout/clearInterval
+        timeoutRef.current = setTimeout(() => {
           updateAllData();
-        }, 15 * 60 * 1000);
-      }, delay);
+          intervalRef.current = setInterval(() => {
+            updateAllData();
+          }, intervalMs);
+        }, delay);
+      }
     }
 
     async function updateAllData() {
@@ -2261,6 +3376,7 @@ const ContextApi = (props) => {
           })
           .catch(err => console.warn("⚠️ Erro ao atualizar observações:", err.message));
         await Promise.all([
+          graphicCandles(),
           graphicDataOne(symbol),
           handleGetPoints(),
           saveMarketNotes(),
@@ -2268,7 +3384,8 @@ const ContextApi = (props) => {
           getRsi(symbol),
           getVppr(symbol),
           correlation(),
-          assetCorrelation(symbol)
+          assetCorrelation(symbol),
+
         ]);
         console.log("✅ Dados atualizados em", new Date().toLocaleTimeString());
       } catch (error) {
@@ -2276,18 +3393,15 @@ const ContextApi = (props) => {
       }
     }
     ;
-  }, [symbol, realTime]);
+  }, [symbol, realTime, timeCurrent]);
   /*======================================================================
     /////////////////////////////////////////////////////////////////////
     ======================================================================*/
 
 
-
   const contextValue = {
     handleSave,
     handleRemove,
-    values,
-    labels,
     atr,
     dadosPrice,
     theme,
@@ -2321,6 +3435,7 @@ const ContextApi = (props) => {
     setDaysValue,
     rsi,
     rsiTime,
+    rsiComplete,
     simulationValueDataRsi,
     simulationLabelDataRsi,
     vppr,
@@ -2348,7 +3463,13 @@ const ContextApi = (props) => {
     loadingSimulation,
     downloadedData,
     dataCorrelation,
-    assetCorrelationData
+    assetCorrelationData,
+    simulationCandleComplete,
+    candlesComplete,
+    vpprComplete,
+    backtest,
+    graphicDataOne,
+    timeCurrent,
   };
 
   return (
@@ -2361,6 +3482,10 @@ const ContextApi = (props) => {
         <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.35)', zIndex: 9999 }}>
           <div style={{ textAlign: 'center', color: '#fff' }}>
             <ProgressSpinner style={{ width: 64, height: 64 }} strokeWidth="6" />
+            {checkEndOfIncrement && (
+              <BsRobot style={{ display: 'flex', position: 'absolute', marginLeft: '50px' }} />
+            )}
+
             <div style={{ marginTop: 12 }}>Updating data...</div>
           </div>
         </div>

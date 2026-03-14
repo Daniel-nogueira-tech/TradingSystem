@@ -30,8 +30,6 @@ ChartJS.register(
 
 const ChartBar = () => {
     const {
-        values,
-        labels,
         atr,
         handleSearch,
         inputRefMain,
@@ -54,7 +52,8 @@ const ChartBar = () => {
         days,
         windowSize,
         loadingSimulation,
-        downloadedData
+        downloadedData,
+        dadosPrice,
 
     } = useContext(AppContext);
     const chartRef = useRef();
@@ -75,13 +74,34 @@ const ChartBar = () => {
 
 
 
+    const value = new Float64Array(dadosPrice.length);
+    const label = new Array(dadosPrice.length);
 
-    const activeValue = simulationValueData?.length > 0 ? simulationValueData : values;
-    const activeLabel = simulationLabelData?.length > 0 ? simulationLabelData : labels;
+    for (let i = 0; i < dadosPrice.length; i++) {
+        value[i] = dadosPrice[i].closePrice;
+        label[i] = dadosPrice[i].closeTime;
+    }
+        const labels = label.map(time =>
+        new Date(time).toLocaleString('pt-BR', {
+            day: '2-digit',
+            month: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+        })
+    );
+
+
+    // Dados ativos para gráfico (prioriza simulação se disponível)
+    const activeValueRaw = simulationValueData?.length > 0 ? simulationValueData : value;
+    const activeLabelRaw = simulationLabelData?.length > 0 ? simulationLabelData : labels ;
+
+    // remove valores 0 do início
+    const firstValidIndex = activeValueRaw.findIndex(v => v > 0);
+
+    const activeValue = firstValidIndex !== -1 ? activeValueRaw.slice(firstValidIndex) : [];
+    const activeLabel = firstValidIndex !== -1 ? activeLabelRaw.slice(firstValidIndex) : [];
     const visibleValues = activeValue.slice(-windowSize);
-    const visibleLabels = activeLabel.slice(-windowSize);
-
-
+    const visibleLabels =  activeLabel.slice(-windowSize);
 
     // Simula carregamento dos dados
     const isLoading = !(activeValue && activeValue.length > 0);
@@ -90,25 +110,40 @@ const ChartBar = () => {
 
     const backgroundColor = useMemo(() => {
         const len = activeValue.length;
-        const result = new Array(len); // Pré-aloca o tamanho do array
+        const result = new Array(len);
         let trendState = null;
+
+        if (len === 0) return result;
 
         result[0] = 'rgba(113, 113, 113, 0.6)';
 
+        // Calcula threshold baseado na volatilidade dos dados visíveis
+        const visibleData = activeValue.slice(-windowSize);
+        let threshold = atr > 0 ? atr / 2 : 0.01;
+
+        // Se ATR for muito pequeno ou dados tiverem baixa volatilidade, usa threshold dinâmico
+        if (visibleData.length > 1) {
+            const diffs = visibleData.slice(1).map((val, i) => Math.abs(val - visibleData[i]));
+            const avgDiff = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+            const dynamicThreshold = avgDiff * 0.1; // 10% da mudança média
+
+            // Usa o maior entre ATR e threshold dinâmico
+            threshold = Math.max(threshold, dynamicThreshold, 0.001);
+        }
+
         for (let i = 1; i < len; i++) {
             const diff = activeValue[i] - activeValue[i - 1];
-            const threshold = atr / 2;
 
             if (diff >= threshold) trendState = 'up';
             else if (diff <= -threshold) trendState = 'down';
 
-            if (trendState === 'up') result[i] = 'rgba(0, 255, 0, 0.44)';
-            else if (trendState === 'down') result[i] = 'rgba(255, 0, 0, 0.44)';
+            if (trendState === 'up') result[i] = 'rgba(0, 255, 0, 0.6)';
+            else if (trendState === 'down') result[i] = 'rgba(255, 0, 0, 0.6)';
             else result[i] = 'rgba(113, 113, 113, 0.6)';
         }
 
         return result;
-    }, [activeValue, atr]);
+    }, [activeValue, atr, windowSize]);
 
 
     /* simular trade  (pega a data do back teste)*/
@@ -222,7 +257,7 @@ const ChartBar = () => {
         labels: visibleLabels,
         datasets: [
             {
-                label: 'Tendência',
+                label: '',
                 data: visibleValues,
                 backgroundColor: backgroundColor.slice(-windowSize),
                 borderRadius: 6,
@@ -265,6 +300,7 @@ const ChartBar = () => {
 
     const options = {
         responsive: true,
+        maintainAspectRatio: false,
         plugins: {
             legend: {
                 position: 'top',
@@ -304,22 +340,25 @@ const ChartBar = () => {
         },
         scales: {
             y: {
-                beginAtZero: false,
+                beginAtZero: true,
                 type: 'linear',
-                suggestedMin: Math.min(...visibleValues) * 0.98,
-                suggestedMax: Math.max(...visibleValues) * 0.102,
+                min: visibleValues.length > 0 ? Math.min(...visibleValues) * 0.995 : undefined,
+                max: visibleValues.length > 0 ? Math.max(...visibleValues) * 1.005 : undefined,
+                grid: {
+                    color: 'rgba(200, 200, 200, 0.1)',
+                },
             },
         },
     };
 
     return (
-        <div style={{ width: '600px', margin: '0 auto' }}>
+        <div className='container-charts-pri'>
             <div className='search-container'>
                 <input
                     ref={inputRefMain}
                     type="text"
                     style={{
-                        width: '140px',
+                        width: '100px',
                         borderRadius: '8px 0px 0px 8px',
                         border: 'none',
                         padding: '8px'
@@ -336,7 +375,7 @@ const ChartBar = () => {
                     onClick={handleSearch}
                 >
                 </button>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
                     <button className='btn-zoom' onClick={handleZoomIn}>Zoom +</button>
                     <button className='btn-zoom' onClick={handleZoomOut}>Zoom -</button>
                     <button className='btn-zoom' onClick={handleResetZoom}>Reset</button>
@@ -435,9 +474,9 @@ const ChartBar = () => {
                 </div>
             )}
             {isLoading ? (
-                <div style={{ width: "100%", height: "270px", margin: "20px auto" }} />
+                <div style={{ width: "100%", height: "400px", margin: "20px auto" }} />
             ) : (
-                <div>
+                <div style={{ position: 'relative', height: '400px', width: '100%', margin: '20px auto' }}>
                     <Bar
                         key={JSON.stringify(selectedPivots)}
                         ref={chartRef}

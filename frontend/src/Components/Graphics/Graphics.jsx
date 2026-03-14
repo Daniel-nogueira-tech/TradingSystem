@@ -6,10 +6,11 @@ import ChartVppr from '../MyChart/ChartVppr';
 import { AppContext } from '../../ContextApi/ContextApi';
 import 'primeicons/primeicons.css';
 import PressureGauge from '../MyChart/PressureGauge';
+import CandleChart from '../MyChart/CandleChart';
 
 
 const Graphics = () => {
-  const { 
+  const {
     dadosPrice,
     activeButton,
     handleClickTime,
@@ -18,10 +19,12 @@ const Graphics = () => {
     setRealTime,
     simulationValueDataComplete,
     windowSize,
-    setWindowSize
+    setWindowSize,
+    timeCurrent,
+    symbol
 
   } = useContext(AppContext);
-  const dadosTables = dadosPrice.reverse();
+  const dadosTables = [...dadosPrice].reverse(); // 🔥 CÓPIA primeiro, depois reverse! Não modifica o original
   const [currentPage, setCurrentPage] = useState(1);
   const [activeStates, setActiveStates] = useState({
     tendencia: false,
@@ -189,10 +192,16 @@ const Graphics = () => {
 
         </div>
       </div>
+      <div>
+        <CandleChart 
+          key={`chart-${symbol}-${timeCurrent}`} // Só muda quando símbolo ou timeframe mudar
+  symbol={symbol}/>
+      </div>
 
       <div className='graphics'>
         <Chart />
       </div>
+
       <div className='graphics' id='graphics'>
 
         <div>
@@ -290,7 +299,7 @@ const Graphics = () => {
         <ChartRsi />
       </div>
       <div className='graphics' id='PressureGauge'>
-        <PressureGauge/>
+        <PressureGauge />
       </div>
 
 
